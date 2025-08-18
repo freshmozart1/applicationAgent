@@ -1,0 +1,64 @@
+{
+    "name": "google_doc_output_schema",
+    "strict": true,
+    "schema": {
+        "type": "object",
+        "properties": {
+            "uri": {
+                "type": "string",
+                "format": "uri"
+            },
+            "document": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string"
+                    },
+                    "body": {
+                        "type": "object",
+                        "properties": {
+                            "content": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": true
+                                }
+                            }
+                        },
+                        "required": [
+                            "content"
+                        ],
+                        "additionalProperties": false
+                    },
+                    "documentStyle": {
+                        "type": "object",
+                        "additionalProperties": true
+                    },
+                    "namedStyles": {
+                        "type": "object",
+                        "additionalProperties": true
+                    },
+                    "suggestionsViewMode": {
+                        "type": "string"
+                    },
+                    "documentId": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "title",
+                    "body",
+                    "namedStyles",
+                    "suggestionsViewMode",
+                    "documentId"
+                ],
+                "additionalProperties": false
+            }
+        },
+        "required": [
+            "uri",
+            "document"
+        ],
+        "additionalProperties": false
+    }
+}

@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.sample
+node_modules
+credentials.json
+token.json
+paper_metadata.json
+response.json
+test_response.json
+.env.sample
