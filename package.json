@@ -26,8 +26,7 @@
   ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "npx tsx index.ts",
-    "build": "tsc && chmod 755 build/*.js"
+    "start": "tsc && chmod 755 build/*.js && node build/client.js build/server.js"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
