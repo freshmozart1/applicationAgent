@@ -8,4 +8,6 @@ paper_metadata.json
 response.json
 test_response.json
 .env.sample
-.github_token
+secrets
+output.json
+build
