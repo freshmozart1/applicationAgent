@@ -56,6 +56,45 @@ const ZDocumentBase = z.object({
     body: ZBody.optional(),
 }).passthrough();
 
+export const ZPostalAddress = z.object({
+    type: z.string().optional(),
+    streetAddress: z.string().optional(),
+    addressLocality: z.string().optional(),
+    addressRegion: z.string().optional(),
+    postalCode: z.string().optional(),
+    addressCountry: z.string().optional(),
+});
+
+export const ZJob = z.object({
+    id: z.string(),
+    trackingId: z.string(),
+    refId: z.string(),
+    link: z.string(),
+    title: z.string(),
+    companyName: z.string(),
+    companyLinkedinUrl: z.string(),
+    companyLogo: z.string(),
+    companyEmployeesCount: z.number(),
+    location: z.string(),
+    postedAt: z.string(),
+    salaryInfo: z.array(z.string()),
+    salary: z.string(),
+    benefits: z.array(z.string()),
+    descriptionHtml: z.string(),
+    applicantsCount: z.union([z.number(), z.string()]),
+    applyUrl: z.string(),
+    descriptionText: z.string(),
+    seniorityLevel: z.string(),
+    employmentType: z.string(),
+    jobFunction: z.string(),
+    industries: z.string(),
+    inputUrl: z.string(),
+    companyAddress: ZPostalAddress,
+    companyWebsite: z.string(),
+    companySlogan: z.string(),
+    companyDescription: z.string(),
+});
+
 export const GOOGLE_OUTPUT_SCHEMA = {
     uri: z.string().url(),
     document: ZDocumentBase.refine(doc => !!doc.tabs || !!doc.body, { message: 'document must include tabs or body' }),
