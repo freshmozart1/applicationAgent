@@ -26,7 +26,7 @@
   ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "rm -rf build && tsc && chmod 755 build/*.js && node build/client.js build/server.js"
+    "start": "rm -rf build && tsc && chmod 755 build/*.js && node build/client.js"
   },
   "devDependencies": {
     "@types/express": "^5.0.3",
@@ -34,12 +34,8 @@
     "tsx": "^4.20.4"
   },
   "dependencies": {
-    "@googleapis/docs": "^5.0.1",
-    "@modelcontextprotocol/sdk": "^1.17.3",
+    "@openai/agents": "^0.0.17",
     "apify-client": "^2.15.1",
-    "express": "^5.1.0",
-    "google-auth-library": "^10.2.1",
-    "openai": "^4.104.0",
     "zod": "^3.25.76"
   }
 }
