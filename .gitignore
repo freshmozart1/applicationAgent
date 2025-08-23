@@ -11,3 +11,4 @@ test_response.json
 secrets
 output.json
 build
+data/applications/*.html
