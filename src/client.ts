@@ -133,8 +133,6 @@ const runner = new Runner({
     workflowName: 'application assistant'
 })
 
-// const filteredJobs = await runner.run(applicationFilter, 'Find 10 jobs that match my personal information.');
-
 jobs = tool({
     name: '#jobs',
     description: 'Fetch a list of jobs',
@@ -170,7 +168,7 @@ const applicationWriter = new Agent({
     model: 'gpt-5',
     tools: [personalInfo, jobs]
 });
-//Use the #goodApplications tool to get good examples for job applications.
+
 const applications = await runner.run(applicationWriter, 'Write job applications for the selected jobs.');
 // Normalize final output into a map of jobId -> application HTML
 let applicationMap: Record<string, string> = {};
