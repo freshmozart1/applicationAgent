@@ -6,6 +6,22 @@ import { Agent, Runner, setTracingExportApiKey, tool } from '@openai/agents';
 
 setTracingExportApiKey(process.env.OPENAI_API_KEY!);
 
+interface JobSelectionOutput {
+    jobs: Job[];
+}
+
+interface ApplicationsOutput {
+    applications: Record<string, string>;
+}
+
+interface HtmlOutput {
+    output: string;
+}
+
+interface QualityAssessmentOutput {
+    output: string;
+}
+
 interface PostalAddress {
     type?: 'PostalAddress' | string | null;
     streetAddress?: string | null;
@@ -233,18 +249,44 @@ class ApplicationAssistant {
         name: 'applicationFilter',
         instructions: 'You are someone who searches for jobs in a list. Fetch a list of jobs with the #listOfJobs tool and personal information with the #personalInformation tool. Use this information to select the 10 jobs that best match your personal information from the list of jobs.',
         model: 'gpt-5-nano',
-        outputType: z.object({
-            jobs: z.array(ZJob)
-        }),
+        outputType: {
+            type: "json_schema",
+            name: "job_selection",
+            strict: false,
+            schema: {
+                type: "object",
+                properties: {
+                    jobs: {
+                        type: "array",
+                        items: { type: "object" }
+                    }
+                },
+                required: ["jobs"],
+                additionalProperties: false
+            }
+        },
         tools: [this.personalInfoTool, this.listOfJobsTool]
     });
     private static applicationWriter = new Agent({
         name: 'applicationWriter',
         instructions: 'You are someone who writes a job application. Fetch a list of jobs with the #jobs tool. Iterate over all jobs in the list and write a job application for each job. Style each application by using HTML and inline CSS. Output a JSON object containing a HTML with inline CSS code for each job application. The output must be a mapping of job ids to HTML/CSS code. Do not include any new line characters in the output.',
         model: 'gpt-5',
-        outputType: z.object({
-            applications: z.record(z.string(), z.string())
-        }),
+        outputType: {
+            type: "json_schema",
+            name: "applications_output",
+            strict: false,
+            schema: {
+                type: "object",
+                properties: {
+                    applications: {
+                        type: "object",
+                        additionalProperties: { type: "string" }
+                    }
+                },
+                required: ["applications"],
+                additionalProperties: false
+            }
+        },
         tools: [this.personalInfoTool, this.listOfJobsTool]
     });
 
@@ -252,7 +294,19 @@ class ApplicationAssistant {
         name: '#htmlCreator',
         instructions: 'You are someone who creates HTML documents. Take the job application provided and generate a complete HTML document with inline CSS styles. The output must be a valid HTML document.',
         model: 'gpt-5-nano',
-        outputType: 'text'
+        outputType: {
+            type: "json_schema",
+            name: "html_output",
+            strict: false,
+            schema: {
+                type: "object",
+                properties: {
+                    output: { type: "string" }
+                },
+                required: ["output"],
+                additionalProperties: false
+            }
+        }
     });
 
     public static async start() {
@@ -288,9 +342,9 @@ class ApplicationAssistant {
                 } catch { }
             }
         }
-        this.jobs = (await this.runner.run(this.applicationFilter, 'Find 10 jobs that match my personal information.')).finalOutput?.jobs || [];
+        this.jobs = ((await this.runner.run(this.applicationFilter, 'Find 10 jobs that match my personal information.')).finalOutput as JobSelectionOutput)?.jobs || [];
         if (this.jobs.length === 0) throw new Error('No jobs returned from applicationFilter');
-        const tenApplications = (await this.runner.run(this.applicationWriter, 'Write job applications for the listed jobs.')).finalOutput?.applications;
+        const tenApplications = ((await this.runner.run(this.applicationWriter, 'Write job applications for the listed jobs.')).finalOutput as ApplicationsOutput)?.applications;
         const parsedTenApplications = await z.record(z.string(), z.string()).safeParseAsync(tenApplications);
         if (parsedTenApplications.error) throw new Error('Invalid applications data from applicationWriter: ' + JSON.stringify(parsedTenApplications.error));
         this.applications = parsedTenApplications.data
@@ -300,13 +354,25 @@ class ApplicationAssistant {
                 name: 'applicationQualityFilter',
                 instructions: 'You are someone who decides if a job application is a good job application by analyzing its similarities with the good examples provided by the #goodApplicationExamples tool. Return true if it\'s a good application, otherwise return false.',
                 model: 'gpt-5-nano',
-                outputType: 'text',
+                outputType: {
+                    type: "json_schema",
+                    name: "quality_assessment",
+                    strict: false,
+                    schema: {
+                        type: "object",
+                        properties: {
+                            output: { type: "string" }
+                        },
+                        required: ["output"],
+                        additionalProperties: false
+                    }
+                },
                 tools: [this.goodApplicationsTool]
             });
             const goodApplication = await this.runner.run(qualityFilter, `Is the following job application a good one:\n\n${JSON.stringify(applicationHtml)}`);
-            if (goodApplication.finalOutput === 'true' && applicationHtml.finalOutput) {
-                this.goodApplications.push(applicationHtml.finalOutput);
-                fs.writeFileSync(path.join(this.applicationsDir, `${jobId}.html`), applicationHtml.finalOutput);
+            if ((goodApplication.finalOutput as QualityAssessmentOutput)?.output === 'true' && (applicationHtml.finalOutput as HtmlOutput)?.output) {
+                this.goodApplications.push((applicationHtml.finalOutput as HtmlOutput).output);
+                fs.writeFileSync(path.join(this.applicationsDir, `${jobId}.html`), (applicationHtml.finalOutput as HtmlOutput).output);
             }
         }
     }
