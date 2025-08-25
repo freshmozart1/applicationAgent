@@ -111,7 +111,7 @@ class ApplicationAssistant {
     });
     private static jobFilter = new Agent({
         name: 'jobFilter',
-        instructions: 'You are someone who searches for jobs in a list. Fetch a list of jobs with the #listOfJobs tool and personal information with the #personalInformation tool. Use this information to select the 5 jobs that best match your personal information from the list of jobs. The list of Jobs is an array of JobInfo objects. Return the JobInfo objects for the 5 matching jobs as a JSON object that looks like this: {jobs: JobInfo[]}',
+        instructions: 'You are someone who searches for jobs in a list. Fetch a list of jobs with the #listOfJobs tool and personal information with the #personalInformation tool. Use this information to select the 5 jobs that best match your personal information from the list of jobs. The list of Jobs is an array of JobInfo objects. Return the JobInfo objects for the 5 matching jobs as a JSON object that looks like this: {jobs: JobInfo[]}. Do not include any additional text or explanations. Do not modify the keys and values of the JobInfo objects.',
         model: 'gpt-5-nano',
         tools: [this.personalInfoTool, this.listOfJobsTool]
     });
@@ -170,11 +170,16 @@ class ApplicationAssistant {
             }
             return null;
         }
-        const jobsRun = await this.runner.run(this.jobFilter, 'Find matching jobs.');
+        let counter = 0;
+        const jobsRun = await this.runner.run(this.jobFilter, 'Find matching jobs.', /*{ stream: true }*/);
+
+        // jobsRun.toTextStream({
+        //     compatibleWithNodeStreams: true
+        // }).pipe(process.stdout);
         this.jobs = jobsRun.finalOutput ? ((): Job[] => {
             const parsed = safeParseJson<{ jobs?: unknown[] }>(jobsRun.finalOutput);
             if (!parsed || !Array.isArray(parsed.jobs)) {
-                console.error('Failed to parse jobs from applicationFilter');
+                console.error('Failed to parse jobs from jobFilter. Final output was: ' + JSON.stringify(jobsRun.finalOutput));
                 return [];
             };
             return parsed.jobs as Job[];
