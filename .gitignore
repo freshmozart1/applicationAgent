@@ -12,3 +12,4 @@ secrets
 output.json
 build
 data/applications/*.html
+.DS_Store

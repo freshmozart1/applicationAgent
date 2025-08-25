@@ -85,6 +85,92 @@ const ZJob = z.object({
 });
 
 class ApplicationAssistant {
+    private static jobSchema: string = `{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Job",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+        "id": { "type": "string" },
+        "trackingId": { "type": "string" },
+        "refId": { "type": "string" },
+        "link": { "type": "string" },
+        "title": { "type": "string" },
+        "companyName": { "type": "string" },
+        "companyLinkedinUrl": { "type": "string" },
+        "companyLogo": { "type": "string" },
+        "companyEmployeesCount": { "type": "number" },
+        "location": { "type": "string" },
+        "postedAt": { "type": "string" },
+        "salaryInfo": {
+            "type": "array",
+            "items": { "type": "string" }
+        },
+        "salary": { "type": "string" },
+        "benefits": {
+            "type": "array",
+            "items": { "type": "string" }
+        },
+        "descriptionHtml": { "type": "string" },
+        "applicantsCount": {
+            "oneOf": [
+                { "type": "number" },
+                { "type": "string" }
+            ]
+        },
+        "applyUrl": { "type": "string" },
+        "descriptionText": { "type": "string" },
+        "seniorityLevel": { "type": "string" },
+        "employmentType": { "type": "string" },
+        "jobFunction": { "type": "string" },
+        "industries": { "type": "string" },
+        "inputUrl": { "type": "string" },
+        "companyAddress": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "type": { "type": ["string", "null"] },
+                "streetAddress": { "type": ["string", "null"] },
+                "addressLocality": { "type": ["string", "null"] },
+                "addressRegion": { "type": ["string", "null"] },
+                "postalCode": { "type": ["string", "null"] },
+                "addressCountry": { "type": ["string", "null"] }
+            },
+            "required": []
+        },
+        "companyWebsite": { "type": "string" },
+        "companySlogan": { "type": ["string", "null"] },
+        "companyDescription": { "type": "string" }
+    },
+    "required": [
+        "id",
+        "trackingId",
+        "refId",
+        "link",
+        "title",
+        "companyName",
+        "companyLinkedinUrl",
+        "companyLogo",
+        "companyEmployeesCount",
+        "location",
+        "postedAt",
+        "salaryInfo",
+        "salary",
+        "benefits",
+        "descriptionHtml",
+        "applicantsCount",
+        "applyUrl",
+        "descriptionText",
+        "seniorityLevel",
+        "employmentType",
+        "jobFunction",
+        "industries",
+        "inputUrl",
+        "companyAddress",
+        "companyWebsite",
+        "companyDescription"
+    ]
+}`;
     private static jobs: Job[] = [];
     private static resumeInspiration: string[] = [];
     private static applications: { [key: string]: string } = {};
@@ -111,9 +197,12 @@ class ApplicationAssistant {
     });
     private static jobFilter = new Agent({
         name: 'jobFilter',
-        instructions: 'You are someone who searches for jobs in a list. Fetch a list of jobs with the #listOfJobs tool and personal information with the #personalInformation tool. Use this information to select the 5 jobs that best match your personal information from the list of jobs. The list of Jobs is an array of JobInfo objects. Return the JobInfo objects for the 5 matching jobs as a JSON object that looks like this: {jobs: JobInfo[]}. Do not include any additional text or explanations. Do not modify the keys and values of the JobInfo objects.',
+        instructions: 'You are someone who searches for jobs in a list. Fetch a list of jobs with the #listOfJobs tool and personal information with the #personalInformation tool. Use this information to select the 5 jobs that best match your personal information from the list of jobs. The list of Jobs is an array of JobInfo objects. JobInfo objects have this JSON schema: ' + this.jobSchema + ' Return the JobInfo objects for the 5 matching jobs as a JSON object that looks like this: {jobs: JobInfo[]}. Do not include any additional text or explanations. Do not modify the keys and values of the JobInfo objects.',
         model: 'gpt-5-nano',
-        tools: [this.personalInfoTool, this.listOfJobsTool]
+        tools: [this.personalInfoTool, this.listOfJobsTool],
+        outputType: z.object({
+            jobs: z.array(ZJob)
+        })
     });
     private static applicationWriter = new Agent({
         name: 'applicationWriter',
