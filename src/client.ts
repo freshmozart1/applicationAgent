@@ -169,6 +169,20 @@ class ApplicationAssistant {
         "companyAddress",
         "companyWebsite",
         "companyDescription"
+    ]}`;
+    private static applicationSchema: string = `{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Job Applications",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+        "applications": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+        }
+    },
+    "required": [
+        "applications"
     ]
 }`;
     private static jobs: Job[] = [];
@@ -206,8 +220,12 @@ class ApplicationAssistant {
     });
     private static applicationWriter = new Agent({
         name: 'applicationWriter',
-        instructions: 'Get the job list via the #listOfJobs tool and personal information via the #personalInformation tool. Create a complete HTML application for each job (inline CSS allowed, no external resources). Only output valid JSON (without Markdown/code block) in the format: {“applications”:{“<id of job 1>”: “<HTML of job 1>”, “<id of job 2>”: “<HTML of job 2>”, ...}}. No line breaks within the HTML strings, escape quotation marks within HTML.',
+        instructions: 'Get the job list via the #listOfJobs tool and personal information via the #personalInformation tool. Create a complete HTML application for each job (inline CSS allowed, no external resources). Only output valid JSON (without Markdown/code block) that complies to this schema: ' + this.applicationSchema + ', like {“applications”:{“<id of job 1>”: “<HTML of job 1>”, “<id of job 2>”: “<HTML of job 2>”, ...}}. No line breaks within the HTML strings, escape quotation marks within HTML.',
         model: 'gpt-5',
+        outputType: z.object({
+            // Map of job ID (string) to application HTML
+            applications: z.record(z.string()).nullable(),
+        }),
         tools: [this.personalInfoTool, this.listOfJobsTool]
     });
 
