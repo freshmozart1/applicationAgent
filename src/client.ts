@@ -2,7 +2,9 @@ import z from 'zod';
 import fs from 'fs';
 import path from 'path';
 import { ApifyClient } from 'apify-client';
-import { Agent, Runner, setTracingExportApiKey, tool } from '@openai/agents';
+import { Agent, handoff, RunContext, Runner, setTracingExportApiKey, tool } from '@openai/agents';
+import { RECOMMENDED_PROMPT_PREFIX } from '@openai/agents-core/extensions';
+import { ZodString } from 'zod/v4';
 
 if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY environment variable not set');
 setTracingExportApiKey(process.env.OPENAI_API_KEY!);
@@ -179,6 +181,7 @@ class ApplicationAssistant {
     private static goodApplications: string[] = [];
     private static badApplications: string[] = [];
     private static applicationsDir = path.join(process.cwd(), 'data/applications');
+    private static dataDir = path.join(process.cwd(), 'data');
     private static runner = new Runner({ workflowName: 'application assistant' });
     private static personalInfoTool = tool({ //TODO #2
         name: '#personalInformation',
@@ -186,55 +189,81 @@ class ApplicationAssistant {
         parameters: z.object({}),
         execute: () => ApplicationAssistant.resumeInspiration
     });
-    private static readResponseFiles(dir: string) {
+    private static readResponseFiles(dir: string): string[] {
         return fs.readdirSync(dir)
             .map(f => path.join(dir, f))
             .filter(p => fs.statSync(p).isFile())
             .map(p => fs.readFileSync(p, 'utf8'));
     }
 
-    private static async filterJobs() {
-        if (this.jobs.length === 0) this.jobs = await (async (): Promise<Job[]> => {
-            const parsed = await z.array(ZJob).safeParseAsync(await ApplicationAssistant.apify
-                .actor('curious_coder/linkedin-jobs-scraper')
-                .call({
-                    urls: ['https://www.linkedin.com/jobs/search?keywords=Web%20Development&location=Hamburg&geoId=106430557&f_C=41629%2C11010661%2C162679%2C11146938%2C234280&distance=25&f_E=1%2C2&f_PP=106430557&f_TPR=&position=1&pageNum=0'],
-                    count: 100
-                })
-                .then(run => ApplicationAssistant.apify.dataset<Job>(run.defaultDatasetId).listItems())
-                .then(res => res.items));
-            if (!parsed.success) throw new Error('Invalid jobs data: ' + JSON.stringify(parsed.error));
-            return parsed.data;
-        })();
-        let i = 0;
-        return Promise.all(Array.from({ length: Math.ceil(this.jobs.length / 20) }, () => new Promise<Job>((resolve, reject) => {
-            const agent = new Agent({
-                name: 'jobsAgent',
-                instructions: 'You are someone who searches for a job in this list of jobs provided by the #jobList tool. Fetch personal information with the #personalInformation tool. Use this information to select the job that best match your personal information from the list of jobs. The list of Jobs is an array of JobInfo objects. JobInfo objects have this JSON schema: ' + this.jobSchema + ' Return the job as a JSON object that looks like this: ' + this.jobSchema + '. Do not include any additional text or explanations. Do not modify the keys and values of the JobInfo objects.',
-                model: 'gpt-5-nano',
-                tools: [this.personalInfoTool, tool({
-                    name: '#jobList',
-                    description: 'Fetch the list of jobs',
-                    parameters: z.object({}),
-                    execute: () => this.jobs.slice(i, i + 20)
-                })],
-                outputType: ZJob
-            });
-            this.runner.run(agent, 'Find a matching job.').then(result => {
-                if (result.finalOutput) resolve(result.finalOutput);
-                reject(new Error('No matching job found.'));
-            });
-            i += 20;
-        })));
+    //This method returns a rejected promise if less than 5 Jobs were filtered
+    private static async filterJobs(): Promise<Job[]> {
+        const chunks: Promise<Job>[] = [],
+            lastRunPath = path.join(this.dataDir, 'last_run.txt'),
+            lastRunId = fs.existsSync(lastRunPath) ? fs.readFileSync(lastRunPath, 'utf8').trim() : null;
+        console.log('Last run ID:', lastRunId);
+        let raw;
+        if (lastRunId) {
+            raw = await this.apify.dataset<Job>(lastRunId).listItems().then(res => res.items);
+        } else {
+            raw = await this.apify.actor('curious_coder/linkedin-jobs-scraper').call({
+                urls: ['https://www.linkedin.com/jobs/search?keywords=Web%20Development&location=Hamburg&geoId=106430557&f_C=41629%2C11010661%2C162679%2C11146938%2C234280&distance=25&f_E=1%2C2&f_PP=106430557&f_TPR=&position=1&pageNum=0'],
+                count: 100
+            }).then(run => {
+                console.log('LinkedIn scraper actor finished with run ID:', run.id);
+                fs.writeFileSync(lastRunPath, run.defaultDatasetId);
+                return this.apify.dataset<Job>(run.defaultDatasetId).listItems();
+            })
+                .then(res => res.items);
+        }
+        const parsed = await z.array(ZJob).safeParseAsync(raw);
+        if (!parsed.success) {
+            console.error('Failed to parse jobs from Apify:', parsed.error);
+            throw new Error('Failed to parse jobs from Apify: ' + JSON.stringify(parsed.error));
+        }
+        console.log('Fetched', parsed.success ? parsed.data.length : 0, 'jobs from Apify');
+        let chunksCounter = 0, size: number, divider = 5;
+        if (parsed.data.length % divider === 0) {
+            size = parsed.data.length / divider;
+        } else {
+            size = Math.ceil(parsed.data.length / divider);
+        }
+        while (chunksCounter < parsed.data.length) {
+            chunks.push(new Promise<Job>((resolve, reject) => {
+                const chunk: Job[] = parsed.data.slice(chunksCounter, chunksCounter + size);
+                const agent = new Agent<unknown, typeof ZJob>({
+                    name: 'jobVacanciesAgent',
+                    instructions: 'You are someone who searches for a job vacancy in the list of job vacancies provided by the #jobVacancies tool. Fetch personal information about yourself with the #personalInformation tool. Use this information to select the job vacancy from the list of job vacancies that best matches your personal information. The list of job vacancies is an array of JobInfo objects. JobInfo objects have this JSON schema: ' + this.jobSchema + ' Return the job vacancy as a JSON object that looks like this: ' + this.jobSchema + '. Do not include any additional text or explanations. Do not modify the keys and values of the JobInfo objects.',
+                    model: 'gpt-5-nano',
+                    tools: [this.personalInfoTool, tool<z.ZodObject<{}, "strip", z.ZodTypeAny, {}, {}>, unknown, Job[]>({
+                        name: '#jobVacancies',
+                        description: 'Fetch the list of job vacancies',
+                        parameters: z.object({}),
+                        execute: () => chunk,
+
+                    })],
+                    outputType: ZJob
+                });
+                this.runner.run<Agent<unknown, typeof ZJob>>(agent, 'Find a matching job.').then(result => {
+                    if (result.finalOutput) resolve(result.finalOutput);
+                    reject(new Error('No matching job found.'));
+                });
+                chunksCounter += size;
+            }));
+        }
+        return Promise.all(chunks);
     }
 
-    private static writeApplications() {
-        return Promise.all(Array.from(this.jobs, job => new Promise<void>((resolve, reject) => {
-            const agent = new Agent({
-                name: 'writerAgent',
-                instructions: 'You are a writer of job application letters. Fetch personal information with the #personalInformation tool. Use the #goodExamples tool and the #badExamples tool for inspiration. Only output valid HTML with doctype. No line breaks within the HTML strings, escape quotation marks within HTML.',
-                model: 'gpt-5',
-                tools: [this.personalInfoTool, tool({
+    private static writeApplications(): Promise<string[]> {
+        return Promise.all(Array.from(this.jobs, job => new Promise<string>((resolve, reject) => {
+            const evaluator = new Agent<string>({
+                name: 'responseEvaluator',
+                instructions: `${RECOMMENDED_PROMPT_PREFIX}
+                You are an evaluator of job application letters. Evaluate the quality of a job application letter by comparing it to the good and bad examples of the #goodExamples and #badExamples tools.Return exactly one word: "good" or "bad".`,
+                model: 'gpt-5-nano',
+                outputType: 'text',
+                handoffDescription: 'Evaluate the quality of a job application letter.',
+                tools: [tool({
                     name: '#goodExamples',
                     description: 'Fetch good examples of job application letters',
                     parameters: z.object({}),
@@ -246,10 +275,19 @@ class ApplicationAssistant {
                     execute: () => ApplicationAssistant.badApplications
                 })]
             });
-            this.runner.run(agent, 'Write a job application letter for this job in HTML (inline CSS allowed, no external resources): ' + JSON.stringify(job) + '.').then((result) => {
-                console.log('Wrote application for job', job.id);
-                fs.writeFileSync(path.join(this.applicationsDir, `${job.id}.html`), result.finalOutput || '', 'utf8');
-                resolve();
+            const agent = new Agent<unknown, 'text'>({
+                name: 'writerAgent',
+                instructions: 'You are a writer of job application letters. Fetch personal information with the #personalInformation tool. Evaluate the quality of your job application letter. Only output valid HTML with doctype. No line breaks within the HTML strings, escape quotation marks within HTML.',
+                model: 'gpt-5',
+                tools: [this.personalInfoTool],
+                handoffs: [handoff(evaluator)]
+            });
+            this.runner.run<Agent<unknown, 'text'>, undefined>(agent, 'Write a job application letter for this job in HTML (inline CSS allowed, no external resources): ' + JSON.stringify(job) + '.').then((result) => {
+                if (result.finalOutput) {
+                    console.log('Wrote application for job', job.id);
+                    fs.writeFileSync(path.join(this.applicationsDir, `${job.id}.html`), result.finalOutput || '', 'utf8');
+                    resolve(result.finalOutput);
+                }
             }).catch(err => reject(err));
         })));
     }
@@ -272,7 +310,7 @@ class ApplicationAssistant {
         this.goodApplications.push(...this.readResponseFiles(goodResDir));
         this.badApplications.push(...this.readResponseFiles(badResDir));
         this.jobs = await this.filterJobs();
-        await this.writeApplications();
+        //TODO #4 await this.writeApplications();
     }
 }
 

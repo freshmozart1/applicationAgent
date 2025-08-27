@@ -13,3 +13,4 @@ output.json
 build
 data/applications/*.html
 .DS_Store
+data/last_run.txt
