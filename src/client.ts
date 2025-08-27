@@ -175,21 +175,6 @@ class ApplicationAssistant {
         token: fs.readFileSync(path.join(process.cwd(), 'secrets/apify_token'), 'utf8').trim()
     });
     private static jobs: Job[] = [];
-    private static async loadJobs(): Promise<Job[]> {
-        if (fs.existsSync(path.join(process.cwd(), 'data/jobs.json'))) {
-            const parsedJobs = await z.array(ZJob).safeParseAsync(JSON.parse(fs.readFileSync(path.join(process.cwd(), 'data/jobs.json'), 'utf8')));
-            if (parsedJobs.error) throw new Error('Invalid jobs data in data/jobs.json: ' + JSON.stringify(parsedJobs.error));
-            return parsedJobs.data;
-        } else {
-            const scrapedJobs = await ApplicationAssistant.apify.actor('curious_coder/linkedin-jobs-scraper').call({
-                'urls': ['https://www.linkedin.com/jobs/search?keywords=Web%20Development&location=Hamburg&geoId=106430557&f_C=41629%2C11010661%2C162679%2C11146938%2C234280&distance=25&f_E=1%2C2&f_PP=106430557&f_TPR=&position=1&pageNum=0'],
-                'count': 50
-            }).then(run => ApplicationAssistant.apify.dataset<Job>(run.defaultDatasetId).listItems().then(res => res.items));
-            const parsedJobs = await z.array(ZJob).safeParseAsync(scrapedJobs);
-            if (parsedJobs.error) throw new Error('Invalid jobs data from Apify: ' + JSON.stringify(parsedJobs.error));
-            return parsedJobs.data;
-        }
-    }
     private static resumeInspiration: string = fs.readFileSync(path.join(process.cwd(), 'data/resumeInspiration.txt'), 'utf8').replace(/[\r\n]+/g, '');
     private static goodApplications: string[] = [];
     private static badApplications: string[] = [];
@@ -208,50 +193,39 @@ class ApplicationAssistant {
             .map(p => fs.readFileSync(p, 'utf8'));
     }
 
-    private static safeParseJson<T>(raw: unknown): T | null {
-        if (raw === null) return null;
-        if (typeof raw === 'object') return raw as T;
-        if (typeof raw === 'string') {
-            try {
-                return JSON.parse(raw) as T;
-            } catch {
-                return null;
-            }
-        }
-        return null;
-    }
-
     private static async filterJobs() {
-        if (this.jobs.length === 0) this.jobs = await this.loadJobs();
-        const agent = new Agent({
-            name: 'jobsAgent',
-            instructions: 'You are someone who searches for jobs in a list. Fetch a list of jobs with the #listOfJobs tool and personal information with the #personalInformation tool. Use this information to select the 5 jobs that best match your personal information from the list of jobs. The list of Jobs is an array of JobInfo objects. JobInfo objects have this JSON schema: ' + this.jobSchema + ' Return the JobInfo objects for the 5 matching jobs as a JSON object that looks like this: {jobs: JobInfo[]}. Do not include any additional text or explanations. Do not modify the keys and values of the JobInfo objects.',
-            model: 'gpt-5-nano',
-            tools: [
-                this.personalInfoTool,
-                tool({
-                    name: '#listOfJobs',
-                    description: 'Fetch a list of jobs',
-                    parameters: z.object({}),
-                    execute: () => ApplicationAssistant.jobs
+        if (this.jobs.length === 0) this.jobs = await (async (): Promise<Job[]> => {
+            const parsed = await z.array(ZJob).safeParseAsync(await ApplicationAssistant.apify
+                .actor('curious_coder/linkedin-jobs-scraper')
+                .call({
+                    urls: ['https://www.linkedin.com/jobs/search?keywords=Web%20Development&location=Hamburg&geoId=106430557&f_C=41629%2C11010661%2C162679%2C11146938%2C234280&distance=25&f_E=1%2C2&f_PP=106430557&f_TPR=&position=1&pageNum=0'],
+                    count: 100
                 })
-            ],
-            outputType: z.object({
-                jobs: z.array(ZJob)
-            })
-        });
-        const run = await this.runner.run(agent, 'Find 5 matching jobs.');
-        const jobs = run.finalOutput ? ((): Job[] => {
-            const parsed = this.safeParseJson<{ jobs?: unknown[] }>(run.finalOutput);
-            if (!parsed || !Array.isArray(parsed.jobs)) {
-                console.error('Failed to parse jobs from jobFilter. Final output was: ' + JSON.stringify(run.finalOutput));
-                return [];
-            };
-            return parsed.jobs as Job[];
-        })() : [];
-        if (jobs.length === 0) throw new Error('No jobs returned from applicationFilter');
-        else this.jobs = jobs;
-        console.log('Total jobs found:', this.jobs.length);
+                .then(run => ApplicationAssistant.apify.dataset<Job>(run.defaultDatasetId).listItems())
+                .then(res => res.items));
+            if (!parsed.success) throw new Error('Invalid jobs data: ' + JSON.stringify(parsed.error));
+            return parsed.data;
+        })();
+        let i = 0;
+        return Promise.all(Array.from({ length: Math.ceil(this.jobs.length / 20) }, () => new Promise<Job>((resolve, reject) => {
+            const agent = new Agent({
+                name: 'jobsAgent',
+                instructions: 'You are someone who searches for a job in this list of jobs provided by the #jobList tool. Fetch personal information with the #personalInformation tool. Use this information to select the job that best match your personal information from the list of jobs. The list of Jobs is an array of JobInfo objects. JobInfo objects have this JSON schema: ' + this.jobSchema + ' Return the job as a JSON object that looks like this: ' + this.jobSchema + '. Do not include any additional text or explanations. Do not modify the keys and values of the JobInfo objects.',
+                model: 'gpt-5-nano',
+                tools: [this.personalInfoTool, tool({
+                    name: '#jobList',
+                    description: 'Fetch the list of jobs',
+                    parameters: z.object({}),
+                    execute: () => this.jobs.slice(i, i + 20)
+                })],
+                outputType: ZJob
+            });
+            this.runner.run(agent, 'Find a matching job.').then(result => {
+                if (result.finalOutput) resolve(result.finalOutput);
+                reject(new Error('No matching job found.'));
+            });
+            i += 20;
+        })));
     }
 
     private static writeApplications() {
@@ -291,13 +265,13 @@ class ApplicationAssistant {
             [secretsDir, 'Secrets directory does not exist'],
             [this.applicationsDir, `Applications directory does not exist: ${this.applicationsDir}`],
             [badResDir, `Bad responses directory does not exist: ${badResDir}`],
-            [goodResDir, `Good responses directory does not exist: ${goodResDir}`],
+            [goodResDir, `Good responses directory does not exist: ${goodResDir}`]
         ];
         for (const [p, msg] of required) if (!fs.existsSync(p)) throw new Error(msg);
 
         this.goodApplications.push(...this.readResponseFiles(goodResDir));
         this.badApplications.push(...this.readResponseFiles(badResDir));
-        await this.filterJobs();
+        this.jobs = await this.filterJobs();
         await this.writeApplications();
     }
 }
