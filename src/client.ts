@@ -203,7 +203,7 @@ class ApplicationAssistant {
             lastRunId = fs.existsSync(lastRunPath) ? fs.readFileSync(lastRunPath, 'utf8').trim() : null;
         console.log('Last run ID:', lastRunId);
         let raw;
-        if (lastRunId) {
+        if (lastRunId && fs.statSync(lastRunPath).birthtimeMs > (Date.now() - 24 * 60 * 60 * 1000)) {
             raw = await this.apify.dataset<Job>(lastRunId).listItems().then(res => res.items);
         } else {
             raw = await this.apify.actor('curious_coder/linkedin-jobs-scraper').call({
