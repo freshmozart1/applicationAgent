@@ -196,12 +196,10 @@ class ApplicationAssistant {
             .map(p => fs.readFileSync(p, 'utf8'));
     }
 
-    //This method returns a rejected promise if less than 5 Jobs were filtered
     private static async filterJobs(): Promise<Job[]> {
         const chunks: Promise<Job>[] = [],
             lastRunPath = path.join(this.dataDir, 'last_run.txt'),
             lastRunId = fs.existsSync(lastRunPath) ? fs.readFileSync(lastRunPath, 'utf8').trim() : null;
-        console.log('Last run ID:', lastRunId);
         let raw;
         if (lastRunId && fs.statSync(lastRunPath).birthtimeMs > (Date.now() - 24 * 60 * 60 * 1000)) {
             raw = await this.apify.dataset<Job>(lastRunId).listItems().then(res => res.items);
@@ -222,7 +220,7 @@ class ApplicationAssistant {
             throw new Error('Failed to parse jobs from Apify: ' + JSON.stringify(parsed.error));
         }
         console.log('Fetched', parsed.success ? parsed.data.length : 0, 'jobs from Apify');
-        let chunksCounter = 0, size: number, divider = 5;
+        let chunksCounter = 0, size: number, divider = 20;
         if (parsed.data.length % divider === 0) {
             size = parsed.data.length / divider;
         } else {
@@ -244,10 +242,38 @@ class ApplicationAssistant {
                     })],
                     outputType: ZJob
                 });
-                this.runner.run<Agent<unknown, typeof ZJob>>(agent, 'Find a matching job.').then(result => {
-                    if (result.finalOutput) resolve(result.finalOutput);
-                    reject(new Error('No matching job found.'));
-                });
+                const maxRetries = 5;
+                let attempts = 0;
+                const attemptRun = () => {
+                    this.runner.run<Agent<unknown, typeof ZJob>>(agent, 'Write a job application letter.').then(result => {
+                        if (result.finalOutput) resolve(result.finalOutput);
+                        else reject(new Error('No final output produced.'));
+                    }).catch(err => {
+                        const msg: string = (err && err.message) ? err.message : String(err);
+                        const msMatch = msg.match(/Please try again in (\d{1,3})ms/);
+                        const sMatch = msg.match(/Please try again in (\d+)(?:\.(\d+))?s/);
+                        let wait: number | null = null;
+
+                        if (msMatch) {
+                            wait = parseInt(msMatch[1], 10);
+                        } else if (sMatch) {
+                            const whole = parseInt(sMatch[1], 10);
+                            const fracRaw = sMatch[2] || '';
+                            // Normalize fraction to milliseconds (take up to 3 digits)
+                            const fracMs = parseInt((fracRaw + '000').slice(0, 3), 10);
+                            wait = whole * 1000 + fracMs;
+                        }
+
+                        if (wait !== null && attempts < maxRetries) {
+                            attempts++;
+                            console.warn(`Filter retry ${attempts}/${maxRetries} after ${wait}ms due to rate limit.`);
+                            setTimeout(attemptRun, wait);
+                        } else {
+                            reject(err);
+                        }
+                    });
+                }
+                attemptRun();
                 chunksCounter += size;
             }));
         }
@@ -255,11 +281,11 @@ class ApplicationAssistant {
     }
 
     private static writeApplications(): Promise<string[]> {
-        return Promise.all(Array.from(this.jobs, job => new Promise<string>((resolve, reject) => {
+        return Promise.all(Array.from(this.jobs, job => new Promise<string>(async (resolve, reject) => {
             const evaluator = new Agent<string>({
                 name: 'responseEvaluator',
                 instructions: `${RECOMMENDED_PROMPT_PREFIX}
-                You are an evaluator of job application letters. Evaluate the quality of a job application letter by comparing it to the good and bad examples of the #goodExamples and #badExamples tools.Return exactly one word: "good" or "bad".`,
+                You are an evaluator of job application letters. Evaluate the quality of a job application letter by comparing it to the good and bad examples of the #goodExamples and #badExamples tools. Return exactly one word: "good" or "bad".`,
                 model: 'gpt-5-nano',
                 outputType: 'text',
                 handoffDescription: 'Evaluate the quality of a job application letter.',
@@ -267,28 +293,78 @@ class ApplicationAssistant {
                     name: '#goodExamples',
                     description: 'Fetch good examples of job application letters',
                     parameters: z.object({}),
-                    execute: () => ApplicationAssistant.goodApplications
+                    execute: () => this.goodApplications
                 }), tool({
                     name: '#badExamples',
                     description: 'Fetch bad examples of job application letters',
                     parameters: z.object({}),
-                    execute: () => ApplicationAssistant.badApplications
+                    execute: () => this.badApplications
                 })]
             });
-            const agent = new Agent<unknown, 'text'>({
+            const agent = new Agent<string>({
                 name: 'writerAgent',
-                instructions: 'You are a writer of job application letters. Fetch personal information with the #personalInformation tool. Evaluate the quality of your job application letter. Only output valid HTML with doctype. No line breaks within the HTML strings, escape quotation marks within HTML.',
+                instructions: 'You are a writer of job application letters. Fetch a job vacancy with the #jobVacancy tool. Fetch personal information with the #personalInformation tool and use the information to write a job application letter for the job vacancy in HTML with inline CSS. Evaluate the quality of your job application letter with the #evaluation tool. Rewrite the job application letter as long as the #evaluation tool returns "bad". Do not include the result of the evaluation in the output. If the #evaluation tool returns "good", output the job application letter as a valid HTML document with doctype. No line breaks within the HTML strings, escape quotation marks within HTML.',
                 model: 'gpt-5',
-                tools: [this.personalInfoTool],
-                handoffs: [handoff(evaluator)]
+                tools: [
+                    this.personalInfoTool,
+                    evaluator.asTool({
+                        toolName: '#evaluation',
+                        toolDescription: 'Evaluate the quality of a job application letter.',
+                        customOutputExtractor: (output: unknown) => {
+                            if (typeof output === 'string') {
+                                const trimmed = output.trim().toLowerCase();
+                                if (trimmed === 'good' || trimmed === 'bad') return trimmed;
+                            }
+                            throw new Error('Evaluation output must be exactly "good" or "bad".');
+                        }
+                    }),
+                    tool<z.ZodObject<{}, "strip", z.ZodTypeAny, {}, {}>, unknown, Job>({
+                        name: '#jobVacancy',
+                        description: 'Fetch a job vacancy.',
+                        parameters: z.object({}),
+                        execute: () => job
+                    })
+                ]
             });
-            this.runner.run<Agent<unknown, 'text'>, undefined>(agent, 'Write a job application letter for this job in HTML (inline CSS allowed, no external resources): ' + JSON.stringify(job) + '.').then((result) => {
-                if (result.finalOutput) {
-                    console.log('Wrote application for job', job.id);
-                    fs.writeFileSync(path.join(this.applicationsDir, `${job.id}.html`), result.finalOutput || '', 'utf8');
-                    resolve(result.finalOutput);
-                }
-            }).catch(err => reject(err));
+            const maxRetries = 5;
+            let attempts = 0;
+
+            const attemptRun = () => {
+                this.runner.run<Agent<string>, { job: Job }>(agent, 'Write a job application letter.').then(result => {
+                    if (result.finalOutput) {
+                        console.log('Wrote application for job: #' + job.id);
+                        fs.writeFileSync(path.join(this.applicationsDir, `${job.id}.html`), result.finalOutput, 'utf8');
+                        resolve(result.finalOutput);
+                    } else {
+                        reject(new Error('No final output produced.'));
+                    }
+                }).catch(err => {
+                    const msg: string = (err && err.message) ? err.message : String(err);
+                    const msMatch = msg.match(/Please try again in (\d{1,3})ms/);
+                    const sMatch = msg.match(/Please try again in (\d+)(?:\.(\d+))?s/);
+                    let wait: number | null = null;
+
+                    if (msMatch) {
+                        wait = parseInt(msMatch[1], 10);
+                    } else if (sMatch) {
+                        const whole = parseInt(sMatch[1], 10);
+                        const fracRaw = sMatch[2] || '';
+                        // Normalize fraction to milliseconds (take up to 3 digits)
+                        const fracMs = parseInt((fracRaw + '000').slice(0, 3), 10);
+                        wait = whole * 1000 + fracMs;
+                    }
+
+                    if (wait !== null && attempts < maxRetries) {
+                        attempts++;
+                        console.warn(`Filter retry ${attempts}/${maxRetries} after ${wait}ms due to rate limit.`);
+                        setTimeout(attemptRun, wait);
+                    } else {
+                        reject(err);
+                    }
+                });
+            };
+
+            attemptRun();
         })));
     }
 
@@ -310,7 +386,9 @@ class ApplicationAssistant {
         this.goodApplications.push(...this.readResponseFiles(goodResDir));
         this.badApplications.push(...this.readResponseFiles(badResDir));
         this.jobs = await this.filterJobs();
+        console.log('These jobs match best:\n', this.jobs.map(job => '#' + job.id + ' ' + job.title + ' at ' + job.companyName).join('\n'));
         //TODO #4 await this.writeApplications();
+        await this.writeApplications();
     }
 }
 
