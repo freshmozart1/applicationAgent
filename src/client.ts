@@ -252,7 +252,6 @@ class ApplicationAssistant {
         this.badApplications.push(...this.readResponseFiles(badResDir));
         this.jobs = await this.filterJobs();
         console.log('These jobs match best:\n', this.jobs.map(job => '#' + job.id + ' ' + job.title + ' at ' + job.companyName).join('\n'));
-        //TODO #4 await this.writeApplications();
         await this.writeApplications();
     }
 }
