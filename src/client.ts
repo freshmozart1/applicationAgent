@@ -88,91 +88,6 @@ const ZJob = z.object({
 });
 
 class ApplicationAssistant {
-    private static jobSchema: string = `{
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "title": "Job",
-    "type": "object",
-    "additionalProperties": false,
-    "properties": {
-        "id": { "type": "string" },
-        "trackingId": { "type": "string" },
-        "refId": { "type": "string" },
-        "link": { "type": "string" },
-        "title": { "type": "string" },
-        "companyName": { "type": "string" },
-        "companyLinkedinUrl": { "type": "string" },
-        "companyLogo": { "type": "string" },
-        "companyEmployeesCount": { "type": "number" },
-        "location": { "type": "string" },
-        "postedAt": { "type": "string" },
-        "salaryInfo": {
-            "type": "array",
-            "items": { "type": "string" }
-        },
-        "salary": { "type": "string" },
-        "benefits": {
-            "type": "array",
-            "items": { "type": "string" }
-        },
-        "descriptionHtml": { "type": "string" },
-        "applicantsCount": {
-            "oneOf": [
-                { "type": "number" },
-                { "type": "string" }
-            ]
-        },
-        "applyUrl": { "type": "string" },
-        "descriptionText": { "type": "string" },
-        "seniorityLevel": { "type": "string" },
-        "employmentType": { "type": "string" },
-        "jobFunction": { "type": "string" },
-        "industries": { "type": "string" },
-        "inputUrl": { "type": "string" },
-        "companyAddress": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-                "type": { "type": ["string", "null"] },
-                "streetAddress": { "type": ["string", "null"] },
-                "addressLocality": { "type": ["string", "null"] },
-                "addressRegion": { "type": ["string", "null"] },
-                "postalCode": { "type": ["string", "null"] },
-                "addressCountry": { "type": ["string", "null"] }
-            },
-            "required": []
-        },
-        "companyWebsite": { "type": "string" },
-        "companySlogan": { "type": ["string", "null"] },
-        "companyDescription": { "type": "string" }
-    },
-    "required": [
-        "id",
-        "trackingId",
-        "refId",
-        "link",
-        "title",
-        "companyName",
-        "companyLinkedinUrl",
-        "companyLogo",
-        "companyEmployeesCount",
-        "location",
-        "postedAt",
-        "salaryInfo",
-        "salary",
-        "benefits",
-        "descriptionHtml",
-        "applicantsCount",
-        "applyUrl",
-        "descriptionText",
-        "seniorityLevel",
-        "employmentType",
-        "jobFunction",
-        "industries",
-        "inputUrl",
-        "companyAddress",
-        "companyWebsite",
-        "companyDescription"
-    ]}`;
     private static apify = new ApifyClient({
         token: fs.readFileSync(path.join(process.cwd(), 'secrets/apify_token'), 'utf8').trim()
     });
@@ -196,88 +111,38 @@ class ApplicationAssistant {
             .map(p => fs.readFileSync(p, 'utf8'));
     }
 
-    private static async filterJobs(): Promise<Job[]> {
-        const chunks: Promise<Job>[] = [],
-            lastRunPath = path.join(this.dataDir, 'last_run.txt'),
-            lastRunId = fs.existsSync(lastRunPath) ? fs.readFileSync(lastRunPath, 'utf8').trim() : null;
-        let raw;
-        if (lastRunId && fs.statSync(lastRunPath).birthtimeMs > (Date.now() - 24 * 60 * 60 * 1000)) {
-            raw = await this.apify.dataset<Job>(lastRunId).listItems().then(res => res.items);
-        } else {
-            raw = await this.apify.actor('curious_coder/linkedin-jobs-scraper').call({
+    private static async scrapeJobs(): Promise<Job[]> {
+        const lastScrapePath = path.join(this.dataDir, 'lastScrapeId');
+        const lastScrapeId = fs.existsSync(lastScrapePath) ? fs.readFileSync(lastScrapePath, 'utf8').trim() : null;
+        const rawScrapeData = (lastScrapeId && fs.statSync(lastScrapePath).birthtimeMs > (Date.now() - 24 * 60 * 60 * 1000)) ?
+            await this.apify.dataset<Job>(lastScrapeId).listItems().then(res => res.items)
+            : await this.apify.actor('curious_coder/linkedin-jobs-scraper').call({
                 urls: ['https://www.linkedin.com/jobs/search?keywords=Web%20Development&location=Hamburg&geoId=106430557&f_C=41629%2C11010661%2C162679%2C11146938%2C234280&distance=25&f_E=1%2C2&f_PP=106430557&f_TPR=&position=1&pageNum=0'],
                 count: 100
-            }).then(run => {
-                console.log('LinkedIn scraper actor finished with run ID:', run.id);
-                fs.writeFileSync(lastRunPath, run.defaultDatasetId);
-                return this.apify.dataset<Job>(run.defaultDatasetId).listItems();
-            })
-                .then(res => res.items);
-        }
-        const parsed = await z.array(ZJob).safeParseAsync(raw);
-        if (!parsed.success) {
-            console.error('Failed to parse jobs from Apify:', parsed.error);
-            throw new Error('Failed to parse jobs from Apify: ' + JSON.stringify(parsed.error));
-        }
-        console.log('Fetched', parsed.success ? parsed.data.length : 0, 'jobs from Apify');
-        let chunksCounter = 0, size: number, divider = 20;
-        if (parsed.data.length % divider === 0) {
-            size = parsed.data.length / divider;
-        } else {
-            size = Math.ceil(parsed.data.length / divider);
-        }
-        while (chunksCounter < parsed.data.length) {
-            chunks.push(new Promise<Job>((resolve, reject) => {
-                const chunk: Job[] = parsed.data.slice(chunksCounter, chunksCounter + size);
-                const agent = new Agent<unknown, typeof ZJob>({
-                    name: 'jobVacanciesAgent',
-                    instructions: 'You are someone who searches for a job vacancy in the list of job vacancies provided by the #jobVacancies tool. Fetch personal information about yourself with the #personalInformation tool. Use this information to select the job vacancy from the list of job vacancies that best matches your personal information. The list of job vacancies is an array of JobInfo objects. JobInfo objects have this JSON schema: ' + this.jobSchema + ' Return the job vacancy as a JSON object that looks like this: ' + this.jobSchema + '. Do not include any additional text or explanations. Do not modify the keys and values of the JobInfo objects.',
-                    model: 'gpt-5-nano',
-                    tools: [this.personalInfoTool, tool<z.ZodObject<{}, "strip", z.ZodTypeAny, {}, {}>, unknown, Job[]>({
-                        name: '#jobVacancies',
-                        description: 'Fetch the list of job vacancies',
-                        parameters: z.object({}),
-                        execute: () => chunk,
+            }).then(scrape => {
+                fs.writeFileSync(lastScrapePath, scrape.defaultDatasetId);
+                return this.apify.dataset<Job>(scrape.defaultDatasetId).listItems();
+            }).then(res => res.items);
+        const parsedJobs = await z.array(ZJob).safeParseAsync(rawScrapeData);
+        if (!parsedJobs.success) throw new Error('Failed to parse jobs from Apify: ' + JSON.stringify(parsedJobs.error));
+        return parsedJobs.data;
+    }
 
-                    })],
-                    outputType: ZJob
-                });
-                const maxRetries = 5;
-                let attempts = 0;
-                const attemptRun = () => {
-                    this.runner.run<Agent<unknown, typeof ZJob>>(agent, 'Write a job application letter.').then(result => {
-                        if (result.finalOutput) resolve(result.finalOutput);
-                        else reject(new Error('No final output produced.'));
-                    }).catch(err => {
-                        const msg: string = (err && err.message) ? err.message : String(err);
-                        const msMatch = msg.match(/Please try again in (\d{1,3})ms/);
-                        const sMatch = msg.match(/Please try again in (\d+)(?:\.(\d+))?s/);
-                        let wait: number | null = null;
-
-                        if (msMatch) {
-                            wait = parseInt(msMatch[1], 10);
-                        } else if (sMatch) {
-                            const whole = parseInt(sMatch[1], 10);
-                            const fracRaw = sMatch[2] || '';
-                            // Normalize fraction to milliseconds (take up to 3 digits)
-                            const fracMs = parseInt((fracRaw + '000').slice(0, 3), 10);
-                            wait = whole * 1000 + fracMs;
-                        }
-
-                        if (wait !== null && attempts < maxRetries) {
-                            attempts++;
-                            console.warn(`Filter retry ${attempts}/${maxRetries} after ${wait}ms due to rate limit.`);
-                            setTimeout(attemptRun, wait);
-                        } else {
-                            reject(err);
-                        }
-                    });
-                }
-                attemptRun();
-                chunksCounter += size;
-            }));
+    private static async filterJobs(): Promise<Job[]> {
+        const filterAgent = new Agent<unknown, 'text'>({
+            name: 'jobFilterAgent',
+            model: 'gpt-5-nano',
+            instructions: `You are an expert in categorizing job vacancies. Your task is to evaluate whether a given job vacancy fits to your personal information. Respond with the word 'true', if the job vacancy fits to your personal information, otherwise respond with the word 'false'.`,
+            outputType: 'text'
+        });
+        const personal = fs.readFileSync(path.join(process.cwd(), 'data/resumeInspiration.txt'), 'utf8').replace(/[\r\n]+/g, '');
+        const scrapedJobs: Job[] = await this.scrapeJobs();
+        const filteredJobs: Job[] = [];
+        for (const job of scrapedJobs) {
+            const run = await this.runner.run<Agent<unknown, 'text'>, 'text'>(filterAgent, `This is personal information about me: ${personal} Evaluate the following job vacancy: ${job}`);
+            if (run.finalOutput && run.finalOutput.trim().toLowerCase() === 'true') filteredJobs.push(job);
         }
-        return Promise.all(chunks);
+        return filteredJobs;
     }
 
     private static writeApplications(): Promise<string[]> {
