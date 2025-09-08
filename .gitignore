@@ -15,3 +15,4 @@ data/applications/*.html
 .DS_Store
 data/last_run.txt
 data/lastScrapeId
+data/lastScrape.json

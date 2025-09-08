@@ -2,9 +2,8 @@ import z from 'zod';
 import fs from 'fs';
 import path from 'path';
 import { ApifyClient } from 'apify-client';
-import { Agent, handoff, RunContext, Runner, setTracingExportApiKey, tool } from '@openai/agents';
+import { Agent, Runner, setTracingExportApiKey, tool } from '@openai/agents';
 import { RECOMMENDED_PROMPT_PREFIX } from '@openai/agents-core/extensions';
-import { ZodString } from 'zod/v4';
 
 if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY environment variable not set');
 setTracingExportApiKey(process.env.OPENAI_API_KEY!);
@@ -36,7 +35,7 @@ interface Job {
     companyName: string;
     companyLinkedinUrl: string;
     companyLogo: string;
-    companyEmployeesCount: number;
+    companyEmployeesCount?: number | undefined;
     location: string;
     postedAt: string;
     salaryInfo: string[];
@@ -46,15 +45,15 @@ interface Job {
     applicantsCount: number | string;
     applyUrl: string;
     descriptionText: string;
-    seniorityLevel: string;
+    seniorityLevel?: string | undefined;
     employmentType: string;
-    jobFunction: string;
-    industries: string;
+    jobFunction?: string | undefined;
+    industries?: string | undefined;
     inputUrl: string;
-    companyAddress: PostalAddress;
-    companyWebsite: string;
+    companyAddress?: PostalAddress | undefined;
+    companyWebsite?: string | undefined;
     companySlogan?: string | null | undefined;
-    companyDescription: string;
+    companyDescription?: string | undefined;
 }
 
 const ZJob = z.object({
@@ -66,7 +65,7 @@ const ZJob = z.object({
     companyName: z.string(),
     companyLinkedinUrl: z.string(),
     companyLogo: z.string(),
-    companyEmployeesCount: z.number(),
+    companyEmployeesCount: z.optional(z.number()),
     location: z.string(),
     postedAt: z.string(),
     salaryInfo: z.array(z.string()),
@@ -76,15 +75,15 @@ const ZJob = z.object({
     applicantsCount: z.union([z.number(), z.string()]),
     applyUrl: z.string(),
     descriptionText: z.string(),
-    seniorityLevel: z.string(),
+    seniorityLevel: z.optional(z.string()),
     employmentType: z.string(),
-    jobFunction: z.string(),
-    industries: z.string(),
+    jobFunction: z.optional(z.string()),
+    industries: z.optional(z.string()),
     inputUrl: z.string(),
-    companyAddress: ZPostalAddress,
-    companyWebsite: z.string(),
-    companySlogan: z.string().optional().nullable(),
-    companyDescription: z.string(),
+    companyAddress: z.optional(ZPostalAddress),
+    companyWebsite: z.optional(z.string()),
+    companySlogan: z.optional(z.string()).nullable(),
+    companyDescription: z.optional(z.string()),
 });
 
 class ApplicationAssistant {
@@ -117,12 +116,21 @@ class ApplicationAssistant {
         const rawScrapeData = (lastScrapeId && fs.statSync(lastScrapePath).birthtimeMs > (Date.now() - 24 * 60 * 60 * 1000)) ?
             await this.apify.dataset<Job>(lastScrapeId).listItems().then(res => res.items)
             : await this.apify.actor('curious_coder/linkedin-jobs-scraper').call({
-                urls: ['https://www.linkedin.com/jobs/search?keywords=Web%20Development&location=Hamburg&geoId=106430557&f_C=41629%2C11010661%2C162679%2C11146938%2C234280&distance=25&f_E=1%2C2&f_PP=106430557&f_TPR=&position=1&pageNum=0'],
+                urls: [
+                    'https://www.linkedin.com/jobs/search?keywords=Web%20Development&location=Hamburg&geoId=106430557&f_C=41629%2C11010661%2C162679%2C11146938%2C234280&distance=25&f_E=1%2C2&f_PP=106430557&f_TPR=r86400&position=1&pageNum=0',
+                    'https://www.linkedin.com/jobs/search?keywords=JavaScript&location=Hamburg&geoId=106430557&distance=25&f_E=1%2C2&f_PP=106430557&f_TPR=r86400&position=1&pageNum=0',
+                    'https://www.linkedin.com/jobs/search?keywords=Full%20Stack%20Engineer&location=Hamburg&geoId=106430557&distance=25&f_JT=F%2CP%2CI&f_PP=106430557&f_TPR=&f_E=1%2C2&position=1&pageNum=0',
+                    'https://www.linkedin.com/jobs/search?keywords=Web%20Developer&location=Hamburg&geoId=106430557&distance=25&f_E=2&f_TPR=&f_PP=106430557&position=1&pageNum=0'
+                ],
                 count: 100
             }).then(scrape => {
                 fs.writeFileSync(lastScrapePath, scrape.defaultDatasetId);
                 return this.apify.dataset<Job>(scrape.defaultDatasetId).listItems();
-            }).then(res => res.items);
+            }).then(res => {
+                fs.writeFileSync(path.join(this.dataDir, 'lastScrape.json'), JSON.stringify(res.items, null, 2));
+                return res.items;
+            });
+        console.log(`Scraped ${rawScrapeData.length} jobs from LinkedIn.`);
         const parsedJobs = await z.array(ZJob).safeParseAsync(rawScrapeData);
         if (!parsedJobs.success) throw new Error('Failed to parse jobs from Apify: ' + JSON.stringify(parsedJobs.error));
         return parsedJobs.data;
@@ -207,19 +215,15 @@ class ApplicationAssistant {
                     const msg: string = (err && err.message) ? err.message : String(err);
                     const msMatch = msg.match(/Please try again in (\d{1,3})ms/);
                     const sMatch = msg.match(/Please try again in (\d+)(?:\.(\d+))?s/);
-                    let wait: number | null = null;
+                    let wait;
 
                     if (msMatch) {
                         wait = parseInt(msMatch[1], 10);
                     } else if (sMatch) {
-                        const whole = parseInt(sMatch[1], 10);
-                        const fracRaw = sMatch[2] || '';
-                        // Normalize fraction to milliseconds (take up to 3 digits)
-                        const fracMs = parseInt((fracRaw + '000').slice(0, 3), 10);
-                        wait = whole * 1000 + fracMs;
+                        wait = parseInt(sMatch[1], 10) * 1000 + parseInt(((sMatch[2] || '') + '000').slice(0, 3), 10);
                     }
 
-                    if (wait !== null && attempts < maxRetries) {
+                    if (wait && attempts < maxRetries) {
                         attempts++;
                         console.warn(`Filter retry ${attempts}/${maxRetries} after ${wait}ms due to rate limit.`);
                         setTimeout(attemptRun, wait);
