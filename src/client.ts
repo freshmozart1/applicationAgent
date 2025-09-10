@@ -2,7 +2,7 @@ import z from 'zod';
 import fs from 'fs';
 import path from 'path';
 import { ApifyClient } from 'apify-client';
-import { Agent, Runner, setTracingExportApiKey, tool } from '@openai/agents';
+import { Agent, Runner, setTracingExportApiKey } from '@openai/agents';
 import { RECOMMENDED_PROMPT_PREFIX } from '@openai/agents-core/extensions';
 
 if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY environment variable not set');
@@ -97,25 +97,25 @@ class ApplicationAssistant {
     private static applicationsDir = path.join(process.cwd(), 'data/applications');
     private static dataDir = path.join(process.cwd(), 'data');
     private static runner = new Runner({ workflowName: 'application assistant' });
-    private static personalInfoTool = tool({ //TODO #2
-        name: '#personalInformation',
-        description: 'Fetch personal information about someone from a file',
-        parameters: z.object({}),
-        execute: () => ApplicationAssistant.resumeInspiration
-    });
+
     private static readResponseFiles(dir: string): string[] {
         return fs.readdirSync(dir)
             .map(f => path.join(dir, f))
-            .filter(p => fs.statSync(p).isFile())
-            .map(p => fs.readFileSync(p, 'utf8'));
+            .filter(p => path.extname(p).toLowerCase() === '.html')
+            .map(p => {
+                const content = fs.readFileSync(p, 'utf8').replace(/[\r\n]+/g, '');
+                console.log('Read response file:', p, 'Content: ', content);
+                return content;
+            });
     }
 
     private static async scrapeJobs(): Promise<Job[]> {
         const lastScrapePath = path.join(this.dataDir, 'lastScrapeId');
         const lastScrapeId = fs.existsSync(lastScrapePath) ? fs.readFileSync(lastScrapePath, 'utf8').trim() : null;
-        const rawScrapeData = (lastScrapeId && fs.statSync(lastScrapePath).birthtimeMs > (Date.now() - 24 * 60 * 60 * 1000)) ?
-            await this.apify.dataset<Job>(lastScrapeId).listItems().then(res => res.items)
-            : await this.apify.actor('curious_coder/linkedin-jobs-scraper').call({
+        let rawScrapeData: Job[] = [];
+        if ((lastScrapeId && fs.existsSync(lastScrapePath) && (fs.statSync(lastScrapePath).ctimeMs < (Date.now() - 24 * 60 * 60 * 1000))) || !lastScrapeId) {
+            console.log('Last scrape is older than a day, performing a new scrape.');
+            rawScrapeData = await this.apify.actor('curious_coder/linkedin-jobs-scraper').call({
                 urls: [
                     'https://www.linkedin.com/jobs/search?keywords=Web%20Development&location=Hamburg&geoId=106430557&f_C=41629%2C11010661%2C162679%2C11146938%2C234280&distance=25&f_E=1%2C2&f_PP=106430557&f_TPR=r86400&position=1&pageNum=0',
                     'https://www.linkedin.com/jobs/search?keywords=JavaScript&location=Hamburg&geoId=106430557&distance=25&f_E=1%2C2&f_PP=106430557&f_TPR=r86400&position=1&pageNum=0',
@@ -126,11 +126,11 @@ class ApplicationAssistant {
             }).then(scrape => {
                 fs.writeFileSync(lastScrapePath, scrape.defaultDatasetId);
                 return this.apify.dataset<Job>(scrape.defaultDatasetId).listItems();
-            }).then(res => {
-                fs.writeFileSync(path.join(this.dataDir, 'lastScrape.json'), JSON.stringify(res.items, null, 2));
-                return res.items;
-            });
-        console.log(`Scraped ${rawScrapeData.length} jobs from LinkedIn.`);
+            }).then(res => res.items);
+        } else {
+            console.log('Using last scrape data.');
+            rawScrapeData = await this.apify.dataset<Job>(lastScrapeId).listItems().then(res => res.items);
+        }
         const parsedJobs = await z.array(ZJob).safeParseAsync(rawScrapeData);
         if (!parsedJobs.success) throw new Error('Failed to parse jobs from Apify: ' + JSON.stringify(parsedJobs.error));
         return parsedJobs.data;
@@ -147,94 +147,162 @@ class ApplicationAssistant {
         const scrapedJobs: Job[] = await this.scrapeJobs();
         const filteredJobs: Job[] = [];
         for (const job of scrapedJobs) {
-            const run = await this.runner.run<Agent<unknown, 'text'>, 'text'>(filterAgent, `This is personal information about me: ${personal} Evaluate the following job vacancy: ${job}`);
+            const run = await this.runner.run<Agent<unknown, 'text'>, 'text'>(filterAgent, `This is personal information about me: ${personal} Evaluate the following job vacancy: ${JSON.stringify(job)}`);
             if (run.finalOutput && run.finalOutput.trim().toLowerCase() === 'true') filteredJobs.push(job);
         }
         return filteredJobs;
     }
 
-    private static writeApplications(): Promise<string[]> {
-        return Promise.all(Array.from(this.jobs, job => new Promise<string>(async (resolve, reject) => {
-            const evaluator = new Agent<string>({
-                name: 'responseEvaluator',
-                instructions: `${RECOMMENDED_PROMPT_PREFIX}
-                You are an evaluator of job application letters. Evaluate the quality of a job application letter by comparing it to the good and bad examples of the #goodExamples and #badExamples tools. Return exactly one word: "good" or "bad".`,
-                model: 'gpt-5-nano',
-                outputType: 'text',
-                handoffDescription: 'Evaluate the quality of a job application letter.',
-                tools: [tool({
-                    name: '#goodExamples',
-                    description: 'Fetch good examples of job application letters',
-                    parameters: z.object({}),
-                    execute: () => this.goodApplications
-                }), tool({
-                    name: '#badExamples',
-                    description: 'Fetch bad examples of job application letters',
-                    parameters: z.object({}),
-                    execute: () => this.badApplications
-                })]
-            });
-            const agent = new Agent<string>({
-                name: 'writerAgent',
-                instructions: 'You are a writer of job application letters. Fetch a job vacancy with the #jobVacancy tool. Fetch personal information with the #personalInformation tool and use the information to write a job application letter for the job vacancy in HTML with inline CSS. Evaluate the quality of your job application letter with the #evaluation tool. Rewrite the job application letter as long as the #evaluation tool returns "bad". Do not include the result of the evaluation in the output. If the #evaluation tool returns "good", output the job application letter as a valid HTML document with doctype. No line breaks within the HTML strings, escape quotation marks within HTML.',
+    private static async writeApplications(): Promise<string[]> {
+        const evaluator = new Agent<string>({
+            name: 'responseEvaluator',
+            instructions: `${RECOMMENDED_PROMPT_PREFIX}
+                You evaluate ONE job application letter (usually full standalone HTML).
+
+                Good reference examples (high quality):
+                ${this.goodApplications.join('\n')}
+
+                Bad reference examples (low quality):
+                ${this.badApplications.join('\n')}
+
+                Goal: Decide if the candidate letter is GOOD or BAD.
+
+                Evaluation Criteria (pass = clearly satisfactory):
+                1. Relevance & Tailoring: References the specific role/company and aligns candidate skills to stated needs.
+                2. Specificity: Uses concrete, role-relevant achievements or technologies (not vague filler).
+                3. Structure: Clear sections (greeting, hook, value alignment, motivation, closing, signature). No jarring ordering.
+                4. Professional Tone: Confident, polite, concise. No slang, hype, fluff, clichés overload, or exaggerated claims without context.
+                5. Clarity & Conciseness: Flows logically. Avoids redundancy. Sentences not needlessly long.
+                6. Personalization: Mentions company/product/mission/stack details that could only apply to that job (not a generic template).
+                7. Impact: Highlights measurable or outcome-focused contributions (metrics, performance, shipped features), when plausible.
+                8. Correctness & Cleanliness: No obvious grammatical errors, broken HTML structure, or placeholder tokens (e.g. [Company], {{NAME}}).
+
+                Definition:
+                - Output "good" ONLY if a strong majority (at least 6 of 8) criteria clearly pass AND there are no critical failures (placeholders, severe genericness, incoherent structure, or obvious spam).
+                - Otherwise output "bad".
+
+                Edge Handling:
+                - Ignore trailing analysis, tool traces, or evaluator instructions if present.
+                - Minor missing metrics is acceptable if other personalization & alignment are strong.
+                - Overly generic = bad even if grammatically fine.
+
+                Forbidden:
+                - Do NOT copy wording from good examples verbatim (but you may still judge positively if stylistically similar).
+                - Do NOT explain your reasoning.
+                - Do NOT output anything except a single lowercase word.
+
+                Final Output:
+                Return EXACTLY:
+                good
+                OR
+                bad
+
+                Nothing else. No punctuation. No quotes.`.replace(/\s\s+/g, '').trim(),
+            model: 'gpt-5-nano',
+            outputType: 'text',
+            handoffDescription: 'Evaluate the quality of a job application letter.'
+        });
+        const maxRetries = 5;
+
+        const runWriterForJobs = async (jobsSubset: Job[]): Promise<string[]> => {
+            const writer = new Agent<string>({
+                name: 'writer',
                 model: 'gpt-5',
+                outputType: 'text',
+                instructions: `${RECOMMENDED_PROMPT_PREFIX}
+                You are an expert job application writer.
+                Goal: Produce ONE JSON array (no extra text) containing a polished HTML application letter (full standalone HTML document with <!DOCTYPE html>) for EVERY job vacancy in the provided list.
+
+                Data:
+                Personal info: ${this.resumeInspiration}
+                Job vacancies (array of JSON objects): ${JSON.stringify(jobsSubset)}
+
+                Requirements for each letter:
+                - Tailor specifically to the corresponding job vacancy (match company, role, requirements).
+                - Professional, concise, persuasive tone.
+                - Output valid standalone HTML5 document with:
+                  * <!DOCTYPE html>
+                  * <html>, <head> (with <meta charset="utf-8"> and <title>Company – Position Application</title>)
+                  * <style> minimal inline CSS
+                  * <body> sections: Greeting, Opening hook, Value alignment, Motivation, Closing, Signature
+                - No placeholders like [Company].
+                - No external resources.
+                - Escape internal quotes.
+                - No line breaks inside strings (replace with spaces).
+                - No markdown.
+                - Must not leak evaluation process or tool calls.
+
+                Quality Gate (per letter):
+                1. Draft letter.
+                2. Call #evaluation tool with ONLY that letter.
+                3. If "bad", improve and re-evaluate.
+                4. Repeat until "good".
+                5. Only then include final letter in output array.
+
+                Output Format:
+                Return EXACTLY a JSON array (length === ${jobsSubset.length}) of strings. Index i corresponds to jobsSubset[i]. No extra text.`.replace(/\s\s+/g, ' ').trim(),
                 tools: [
-                    this.personalInfoTool,
                     evaluator.asTool({
                         toolName: '#evaluation',
-                        toolDescription: 'Evaluate the quality of a job application letter.',
+                        toolDescription: 'Evaluate a single job application letter. Returns "good" or "bad".',
                         customOutputExtractor: (output: unknown) => {
                             if (typeof output === 'string') {
                                 const trimmed = output.trim().toLowerCase();
                                 if (trimmed === 'good' || trimmed === 'bad') return trimmed;
                             }
-                            throw new Error('Evaluation output must be exactly "good" or "bad".');
+                            throw new Error('Evaluation output must be exactly "good" or "bad"');
                         }
-                    }),
-                    tool<z.ZodObject<{}, "strip", z.ZodTypeAny, {}, {}>, unknown, Job>({
-                        name: '#jobVacancy',
-                        description: 'Fetch a job vacancy.',
-                        parameters: z.object({}),
-                        execute: () => job
                     })
                 ]
             });
-            const maxRetries = 5;
-            let attempts = 0;
 
-            const attemptRun = () => {
-                this.runner.run<Agent<string>, { job: Job }>(agent, 'Write a job application letter.').then(result => {
-                    if (result.finalOutput) {
-                        console.log('Wrote application for job: #' + job.id);
-                        fs.writeFileSync(path.join(this.applicationsDir, `${job.id}.html`), result.finalOutput, 'utf8');
-                        resolve(result.finalOutput);
-                    } else {
-                        reject(new Error('No final output produced.'));
+            let attempt = 0;
+            while (attempt <= maxRetries) {
+                try {
+                    const run = await this.runner.run<Agent<string>, { job: Job }>(writer, 'Write job application letters.');
+                    if (!run.finalOutput) throw new Error('No final output produced.');
+                    const parsed = JSON.parse(run.finalOutput);
+                    if (Array.isArray(parsed) && parsed.length === jobsSubset.length && parsed.every(v => typeof v === 'string')) {
+                        return parsed;
                     }
-                }).catch(err => {
-                    const msg: string = (err && err.message) ? err.message : String(err);
-                    const msMatch = msg.match(/Please try again in (\d{1,3})ms/);
-                    const sMatch = msg.match(/Please try again in (\d+)(?:\.(\d+))?s/);
-                    let wait;
+                    throw new Error('Output is not a valid JSON array of correct length.');
+                } catch (err: any) {
+                    const message: string = err?.message || String(err);
+                    const isTooLarge = err?.code === 'rate_limit_exceeded' && /Request too large/i.test(message);
+                    const isRateLimited = err?.code === 'rate_limit_exceeded';
 
-                    if (msMatch) {
-                        wait = parseInt(msMatch[1], 10);
-                    } else if (sMatch) {
-                        wait = parseInt(sMatch[1], 10) * 1000 + parseInt(((sMatch[2] || '') + '000').slice(0, 3), 10);
+                    if (isTooLarge) {
+                        if (jobsSubset.length === 1) throw err;
+                        const mid = Math.floor(jobsSubset.length / 2);
+                        console.warn(`Request too large. Splitting ${jobsSubset.length} jobs into ${mid} + ${jobsSubset.length - mid}.`);
+                        const first = await runWriterForJobs(jobsSubset.slice(0, mid));
+                        const second = await runWriterForJobs(jobsSubset.slice(mid));
+                        return [...first, ...second];
                     }
 
-                    if (wait && attempts < maxRetries) {
-                        attempts++;
-                        console.warn(`Filter retry ${attempts}/${maxRetries} after ${wait}ms due to rate limit.`);
-                        setTimeout(attemptRun, wait);
-                    } else {
-                        reject(err);
+                    if (isRateLimited) {
+                        // Parse suggested wait time
+                        const msMatch = message.match(/try again in (\d{1,4})ms/i);
+                        const sMatch = message.match(/try again in (\d+)(?:\.(\d+))?s/i);
+                        let wait: number | undefined;
+                        if (msMatch) wait = parseInt(msMatch[1], 10);
+                        else if (sMatch) wait = parseInt(sMatch[1], 10) * 1000 + parseInt(((sMatch[2] || '') + '000').slice(0, 3), 10);
+                        else wait = 1000 + attempt * 500;
+                        if (attempt < maxRetries) {
+                            attempt++;
+                            console.warn(`Rate limited (attempt ${attempt}/${maxRetries}). Waiting ${wait}ms.`);
+                            await new Promise(r => setTimeout(r, wait));
+                            continue;
+                        }
                     }
-                });
-            };
+                    throw err;
+                }
+            }
+            throw new Error('Exceeded max retries for writer.');
+        };
 
-            attemptRun();
-        })));
+        const applications = await runWriterForJobs(this.jobs);
+        return applications;
     }
 
     public static async start() {
@@ -256,7 +324,13 @@ class ApplicationAssistant {
         this.badApplications.push(...this.readResponseFiles(badResDir));
         this.jobs = await this.filterJobs();
         console.log('These jobs match best:\n', this.jobs.map(job => '#' + job.id + ' ' + job.title + ' at ' + job.companyName).join('\n'));
-        await this.writeApplications();
+        const applications = await this.writeApplications();
+        for (const application of applications) {
+            const jobId = this.jobs[applications.indexOf(application)].id;
+            const filename = path.join(this.applicationsDir, `${jobId}.html`);
+            fs.writeFileSync(filename, application);
+            console.log('Wrote application letter to', filename);
+        }
     }
 }
 
