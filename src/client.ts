@@ -90,12 +90,13 @@ class ApplicationAssistant {
     private static apify = new ApifyClient({
         token: fs.readFileSync(path.join(process.cwd(), 'secrets/apify_token'), 'utf8').trim()
     });
+    private static dataDir = path.join(process.cwd(), 'data');
+    private static scrapeUrls = fs.readFileSync(path.join(this.dataDir, 'scrapeUrls.txt'), 'utf8').split('\n').map(l => l.trim());
+    private static resumeInspiration: string = fs.readFileSync(path.join(this.dataDir, 'resumeInspiration.txt'), 'utf8').replace(/[\r\n]+/g, '');
+    private static applicationsDir = path.join(this.dataDir, 'applications');
     private static jobs: Job[] = [];
-    private static resumeInspiration: string = fs.readFileSync(path.join(process.cwd(), 'data/resumeInspiration.txt'), 'utf8').replace(/[\r\n]+/g, '');
     private static goodApplications: string[] = [];
     private static badApplications: string[] = [];
-    private static applicationsDir = path.join(process.cwd(), 'data/applications');
-    private static dataDir = path.join(process.cwd(), 'data');
     private static runner = new Runner({ workflowName: 'application assistant' });
 
     private static readResponseFiles(dir: string): string[] {
@@ -111,27 +112,18 @@ class ApplicationAssistant {
 
     private static async scrapeJobs(): Promise<Job[]> {
         const lastScrapePath = path.join(this.dataDir, 'lastScrapeId');
-        const lastScrapeId = fs.existsSync(lastScrapePath) ? fs.readFileSync(lastScrapePath, 'utf8').trim() : null;
-        let rawScrapeData: Job[] = [];
+        let lastScrapeId = fs.existsSync(lastScrapePath) ? fs.readFileSync(lastScrapePath, 'utf8').trim() : null;
         if ((lastScrapeId && fs.existsSync(lastScrapePath) && (fs.statSync(lastScrapePath).ctimeMs < (Date.now() - 24 * 60 * 60 * 1000))) || !lastScrapeId) {
             console.log('Last scrape is older than a day, performing a new scrape.');
-            rawScrapeData = await this.apify.actor('curious_coder/linkedin-jobs-scraper').call({
-                urls: [
-                    'https://www.linkedin.com/jobs/search?keywords=Web%20Development&location=Hamburg&geoId=106430557&f_C=41629%2C11010661%2C162679%2C11146938%2C234280&distance=25&f_E=1%2C2&f_PP=106430557&f_TPR=r86400&position=1&pageNum=0',
-                    'https://www.linkedin.com/jobs/search?keywords=JavaScript&location=Hamburg&geoId=106430557&distance=25&f_E=1%2C2&f_PP=106430557&f_TPR=r86400&position=1&pageNum=0',
-                    'https://www.linkedin.com/jobs/search?keywords=Full%20Stack%20Engineer&location=Hamburg&geoId=106430557&distance=25&f_JT=F%2CP%2CI&f_PP=106430557&f_TPR=&f_E=1%2C2&position=1&pageNum=0',
-                    'https://www.linkedin.com/jobs/search?keywords=Web%20Developer&location=Hamburg&geoId=106430557&distance=25&f_E=2&f_TPR=&f_PP=106430557&position=1&pageNum=0'
-                ],
+            await this.apify.actor('curious_coder/linkedin-jobs-scraper').call({
+                urls: this.scrapeUrls,
                 count: 100
             }).then(scrape => {
-                fs.writeFileSync(lastScrapePath, scrape.defaultDatasetId);
-                return this.apify.dataset<Job>(scrape.defaultDatasetId).listItems();
-            }).then(res => res.items);
-        } else {
-            console.log('Using last scrape data.');
-            rawScrapeData = await this.apify.dataset<Job>(lastScrapeId).listItems().then(res => res.items);
-        }
-        const parsedJobs = await z.array(ZJob).safeParseAsync(rawScrapeData);
+                lastScrapeId = scrape.defaultDatasetId;
+                fs.writeFileSync(lastScrapePath, lastScrapeId);
+            });
+        } else console.log('Using last scrape data.');
+        const parsedJobs = await z.array(ZJob).safeParseAsync(await this.apify.dataset<Job>(lastScrapeId!).listItems().then(res => res.items));
         if (!parsedJobs.success) throw new Error('Failed to parse jobs from Apify: ' + JSON.stringify(parsedJobs.error));
         return parsedJobs.data;
     }

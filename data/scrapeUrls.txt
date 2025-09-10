@@ -1,0 +1,4 @@
+https://www.linkedin.com/jobs/search?keywords=Web%20Development&location=Hamburg&geoId=106430557&f_C=41629%2C11010661%2C162679%2C11146938%2C234280&distance=25&f_E=1%2C2&f_PP=106430557&f_TPR=r86400&position=1&pageNum=0
+https://www.linkedin.com/jobs/search?keywords=JavaScript&location=Hamburg&geoId=106430557&distance=25&f_E=1%2C2&f_PP=106430557&f_TPR=r86400&position=1&pageNum=0
+https://www.linkedin.com/jobs/search?keywords=Full%20Stack%20Engineer&location=Hamburg&geoId=106430557&distance=25&f_JT=F%2CP%2CI&f_PP=106430557&f_TPR=&f_E=1%2C2&position=1&pageNum=0
+https://www.linkedin.com/jobs/search?keywords=Web%20Developer&location=Hamburg&geoId=106430557&distance=25&f_E=2&f_TPR=&f_PP=106430557&position=1&pageNum=0
