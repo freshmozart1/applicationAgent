@@ -169,13 +169,11 @@ class ApplicationAssistant {
             let attempt = 0;
             while (attempt <= maxRetries) {
                 try {
-                    const run = await this.runner.run<Agent<string>, { job: Job }>(writer, 'Write job application letters.');
-                    if (!run.finalOutput) throw new Error('No final output produced.');
-                    const parsed = JSON.parse(run.finalOutput);
-                    if (Array.isArray(parsed) && parsed.length === jobsSubset.length && parsed.every(v => typeof v === 'string')) {
-                        return parsed;
-                    }
-                    throw new Error('Output is not a valid JSON array of correct length.');
+                    const finalOutput = (await this.runner.run<Agent<string>, { job: Job }>(writer, 'Write job application letters.')).finalOutput;
+                    if (!finalOutput) throw new Error('Writer did not return a final output.');
+                    const parsed = JSON.parse(finalOutput);
+                    if (Array.isArray(parsed) && parsed.length === jobsSubset.length && parsed.every(v => typeof v === 'string')) return parsed;
+                    throw new Error('Writer did not return valid final output.');
                 } catch (err: any) {
                     const message: string = err?.message || String(err);
                     const isTooLarge = err?.code === 'rate_limit_exceeded' && /Request too large/i.test(message);
@@ -185,9 +183,10 @@ class ApplicationAssistant {
                         if (jobsSubset.length === 1) throw err;
                         const mid = Math.floor(jobsSubset.length / 2);
                         console.warn(`Request too large. Splitting ${jobsSubset.length} jobs into ${mid} + ${jobsSubset.length - mid}.`);
-                        const first = await runWriterForJobs(jobsSubset.slice(0, mid));
-                        const second = await runWriterForJobs(jobsSubset.slice(mid));
-                        return [...first, ...second];
+                        return [
+                            ...(await runWriterForJobs(jobsSubset.slice(0, mid))),
+                            ...(await runWriterForJobs(jobsSubset.slice(mid)))
+                        ];
                     }
 
                     if (isRateLimited) {
