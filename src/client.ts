@@ -17,6 +17,8 @@ interface PostalAddress {
     addressCountry?: string | null;
 }
 
+const CWD = process.cwd();
+
 const ZPostalAddress = z.object({
     type: z.string().optional().nullable(),
     streetAddress: z.string().optional().nullable(),
@@ -88,9 +90,9 @@ const ZJob = z.object({
 
 class ApplicationAssistant {
     private static apify = new ApifyClient({
-        token: fs.readFileSync(path.join(process.cwd(), 'secrets/apify_token'), 'utf8').trim()
+        token: fs.readFileSync(path.join(CWD, 'secrets', 'apify_token'), 'utf8').trim()
     });
-    private static dataDir = path.join(process.cwd(), 'data');
+    private static dataDir = path.join(CWD, 'data');
     private static scrapeUrls = fs.readFileSync(path.join(this.dataDir, 'scrapeUrls.txt'), 'utf8').split('\n').map(l => l.trim());
     private static resumeInspiration: string = fs.readFileSync(path.join(this.dataDir, 'resumeInspiration.txt'), 'utf8').replace(/[\r\n]+/g, '');
     private static applicationsDir = path.join(this.dataDir, 'applications');
@@ -200,11 +202,10 @@ class ApplicationAssistant {
     }
 
     public static async start() {
-        const cwd = process.cwd();
-        const secretsDir = path.join(cwd, 'secrets');
+        const secretsDir = path.join(CWD, 'secrets');
         const required: Array<[string, string]> = [
             [path.join(secretsDir, 'apify_token'), `Apify token file does not exist: ${secretsDir}/apify_token`],
-            [path.join(cwd, 'data'), 'Data directory does not exist'],
+            [path.join(CWD, 'data'), 'Data directory does not exist'],
             [secretsDir, 'Secrets directory does not exist'],
             [this.applicationsDir, `Applications directory does not exist: ${this.applicationsDir}`],
             [path.join(this.dataDir, 'resumeInspiration.txt'), `Resume inspiration file does not exist: ${path.join(this.dataDir, 'resumeInspiration.txt')}`],
