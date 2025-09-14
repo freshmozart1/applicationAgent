@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { ApifyClient } from 'apify-client';
 import { Agent, Runner, RunResult, setTracingExportApiKey } from '@openai/agents';
-import { promptBuilder } from './helpers.js';
+import { promptBuilder, normalizeWhitespace } from './helpers.js';
 import { InvalidEvaluationOutputError, InvalidWriterOutputError, ParsingAfterScrapeError } from './errors.js';
 
 if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY environment variable not set');
@@ -144,7 +144,7 @@ class ApplicationAssistant {
      * 
      * This information will be used by the AI to tailor application letters to better match the user's profile and improve their chances of success.
      */
-    private static resumeInspiration: string = fs.readFileSync(path.join(this.dataDir, 'resumeInspiration.txt'), 'utf8').replace(/[\r\n]+/g, '');
+    private static resumeInspiration: string = normalizeWhitespace(fs.readFileSync(path.join(this.dataDir, 'resumeInspiration.txt'), 'utf8'));
     /**
      * This directory is where the generated application letters will be saved. It also contains good and bad application letters for reference.
      */
