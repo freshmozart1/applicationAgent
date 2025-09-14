@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { ApifyClient } from 'apify-client';
 import { Agent, Runner, RunResult, setTracingExportApiKey } from '@openai/agents';
-import { promptBuilder } from './instructions/promptBuilder.js';
+import { promptBuilder } from './helpers.js';
 import { InvalidEvaluationOutputError, InvalidWriterOutputError, ParsingAfterScrapeError } from './errors.js';
 
 if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY environment variable not set');
@@ -318,6 +318,9 @@ class ApplicationAssistant {
                      * The error message is used to determine if the error was due to rate limiting or input size issues.
                      */
                     const msg: string = err?.message || String(err);
+                    /**
+                     * This constant holds the error code from the caught exception, if available.
+                     */
                     const code: string | undefined = err?.code;
                     /**
                      * This constant checks if the error was due to the input being too large for the writer agent.

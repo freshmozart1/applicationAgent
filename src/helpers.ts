@@ -2,14 +2,16 @@ import path from 'path';
 import fs from 'fs';
 import { RECOMMENDED_PROMPT_PREFIX } from '@openai/agents-core/extensions';
 
+export function normalizeWhitespace(input: string) {
+    return input.replace(/\r/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n\n').trim();
+}
 export function promptBuilder(agentType: 'filter' | 'writer' | 'evaluator', additionalPlaceholders: Array<[string, string]> = []): string {
-    const norm = (s: string) => s.replace(/\r/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n\n').trim();
     const readApps = (kind: 'good' | 'bad') => {
         const dir = path.join(process.cwd(), 'data', 'applications', kind + 'Responses');
         if (!fs.existsSync(dir)) throw new Error(`Responses directory does not exist: ${dir}`);
         return fs.readdirSync(dir)
             .filter(f => f.endsWith('.html'))
-            .map(f => norm(fs.readFileSync(path.join(dir, f), 'utf8')))
+            .map(f => normalizeWhitespace(fs.readFileSync(path.join(dir, f), 'utf8')))
             .filter(Boolean);
     };
     const base = path.join(process.cwd(), 'instructions');
@@ -19,7 +21,7 @@ export function promptBuilder(agentType: 'filter' | 'writer' | 'evaluator', addi
     (Object.keys(fileMap) as Array<keyof typeof fileMap>).forEach(k => {
         const p = path.join(base, fileMap[k]);
         if (!fs.existsSync(p)) throw new Error(`${k[0].toUpperCase() + k.slice(1)} instructions file does not exist: ${p}`);
-        const content = norm(fs.readFileSync(p, 'utf8'));
+        const content = normalizeWhitespace(fs.readFileSync(p, 'utf8'));
         if (!content) throw new Error(`${k[0].toUpperCase() + k.slice(1)} instructions file is empty: ${p}`);
         instructions[k] = content;
     });
@@ -34,7 +36,7 @@ export function promptBuilder(agentType: 'filter' | 'writer' | 'evaluator', addi
         const reservedVals = Object.values(reservedPlaceholders);
         if (additionalPlaceholders.some(([ph]) => reservedVals.includes(ph))) throw new Error(`Additional placeholders cannot use reserved placeholder names: ${reservedVals.join(', ')}`);
         if (additionalPlaceholders.some(([, v]) => !v.trim())) throw new Error('All additional placeholder values must be non-empty strings');
-        additionalPlaceholders = additionalPlaceholders.map(([ph, v]) => [ph, norm(v)]);
+        additionalPlaceholders = additionalPlaceholders.map(([ph, v]) => [ph, normalizeWhitespace(v)]);
     }
     return [
         [reservedPlaceholders.GOOD_APPLICATIONS, readApps('good').join('\n')],
