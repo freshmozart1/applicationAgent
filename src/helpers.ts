@@ -1,3 +1,4 @@
+import OpenAI from "openai";
 import path from 'path';
 import fs from 'fs';
 import { RECOMMENDED_PROMPT_PREFIX } from '@openai/agents-core/extensions';
@@ -44,4 +45,114 @@ export function promptBuilder(agentType: 'filter' | 'writer' | 'evaluator', addi
         [reservedPlaceholders.RECOMMENDED_PROMPT_PREFIX, RECOMMENDED_PROMPT_PREFIX],
         ...additionalPlaceholders
     ].reduce((prev, [ph, val]) => prev.replaceAll(ph, val), instructions[agentType]);
+}
+
+type RetryOptions = {
+    retries?: number;
+    baseDelayMs?: number;
+    maxDelayMs?: number;
+    jitterRatio?: number;
+    retryOn?: (info: {
+        status: number | null;
+        error: unknown;
+        attempt: number;
+    }) => boolean;
+    onRetry?: (info: {
+        attempt: number;
+        delayMs: number;
+        reason: string;
+    }) => void;
+    /**
+     * Optional handler invoked when the error message contains 'request too large'.
+     * Should perform domain-specific splitting and return combined result.
+     */
+    onRequestTooLarge?: () => Promise<any>;
+};
+
+const DEFAULT_RETRYABLE_STATUS = (status: number | null) => status === 429 || status === null || (status >= 500 && status < 600);
+
+function extractSuggestedDelayMs(err: unknown): number | null {
+    if (err && typeof err === 'object') {
+        const anyErr: any = err as any;
+        const headers = anyErr?.response?.headers;
+        if (headers) {
+            console.log('Error headers:', headers);
+            const retryAfter = headers['retry-after'] || headers['Retry-After'];
+            if (retryAfter) {
+                const asNumber = Number(retryAfter);
+                if (!Number.isNaN(asNumber)) {
+                    return asNumber * 1000; //if header.retry-after is in seconds, return milliseconds
+                } else {
+                    const dateMs = Date.parse(retryAfter);
+                    if (!Number.isNaN(dateMs)) {
+                        const delta = dateMs - Date.now();
+                        if (delta > 0) return delta; //if date is in the future, return milliseconds until that date
+                    }
+                }
+            }
+        }
+        if (typeof anyErr.message === 'string') {
+            const retrymatch = anyErr.message.match(/try again in (?:(\d{1,4})ms|(\d+)(?:\.(\d+))?s)/i);
+            if (retrymatch) {
+                const [, ms, s] = retrymatch;
+                if (ms) return Number(ms);
+                if (s) return Number(s) * 1000;
+            }
+        }
+    }
+    return null;
+}
+
+export async function safeCall<T>(context: string, fn: () => Promise<T>, opts: RetryOptions = {}): Promise<T> {
+    const {
+        retries = 5,
+        baseDelayMs = 600,
+        maxDelayMs = 8000,
+        jitterRatio = 0.2,
+        retryOn = ({ status }) => DEFAULT_RETRYABLE_STATUS(status),
+        onRetry,
+        onRequestTooLarge
+    } = opts;
+    let attempt = 0;
+    while (true) {
+        try {
+            return await fn();
+        } catch (err) {
+            let status: any, message: string, type: string | undefined;
+            if (err instanceof OpenAI.APIError) {
+                status = err.status ?? null;
+                type = err.type;
+                message = err.message;
+            } else {
+                status = null;
+                type = 'unknown';
+                message = (err as any)?.message ?? String(err);
+            }
+            if (message && /request too large/i.test(message)) {
+                if (onRequestTooLarge) {
+                    console.warn(`[safeCall] ${context} request too large; invoking split handler.`);
+                    return await onRequestTooLarge();
+                }
+                console.error(`[safeCall] ${context} request too large but no split handler provided.`);
+                throw err;
+            }
+            if (!(attempt < retries && retryOn({ status, error: err, attempt }))) {
+                console.error(`[safeCall] ${context} failed (final):`, { status, type, message });
+                throw err;
+            }
+            let delayMs: number | null = extractSuggestedDelayMs(err);
+            let reason = 'server-suggested';
+            if (delayMs === null) {
+                console.warn('[safeCall] could not extract suggested delay from error:', err, 'falling back to exponential backoff');
+                reason = status === 429 ? 'rate-limit' : (status && status >= 500 ? 'server-error' : 'network/unknown');
+                delayMs = Math.min(maxDelayMs, baseDelayMs * (2 ** attempt));
+            }
+            const jitterRange = delayMs * jitterRatio;
+            delayMs = Math.max(0, Math.round(delayMs + (Math.random() * jitterRange * 2) - jitterRange));
+            onRetry?.({ attempt: attempt + 1, delayMs, reason });
+            console.warn(`[safeCall] ${context} failed (attempt ${attempt + 1} of ${retries}, ${reason}), retrying in ${delayMs}ms:`, { status, type, message });
+            await new Promise(res => setTimeout(res, delayMs));
+            attempt++;
+        }
+    }
 }

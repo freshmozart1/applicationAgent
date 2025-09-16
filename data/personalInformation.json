@@ -1,0 +1,219 @@
+{
+    "contact": {
+        "name": "John Doe",
+        "email": "john.doe@example.com",
+        "phone": "0123456789",
+        "portfolio_urls": []
+    },
+    "eligibility": {
+        "work_authorization": [
+            {
+                "region": "EU",
+                "status": "Citizen"
+            },
+            {
+                "region": "DE",
+                "status": "PermanentResident"
+            }
+        ],
+        "security_clearance": null,
+        "relocation": {
+            "willing": false,
+            "regions": [
+                "EU"
+            ]
+        },
+        "remote": {
+            "willing": true,
+            "time_zone": "Europe/Berlin"
+        },
+        "availability": {
+            "notice_period_days": 0
+        },
+        "work_schedule_constraints": {
+            "weekends": false,
+            "nights": false
+        }
+    },
+    "constraints": {
+        "salary_min": {
+            "currency": "EUR",
+            "amount": 35000
+        },
+        "locations_allowed": [
+            "Hamburg, Germany"
+        ],
+        "company_blacklist": [],
+        "industries_disallowed": []
+    },
+    "preferences": {
+        "roles": [
+            {
+                "title": "Full-Stack Engineer",
+                "weight": 1.0
+            }
+        ],
+        "seniority": [
+            {
+                "level": "Junior",
+                "weight": 1.0
+            },
+            {
+                "level": "Mid",
+                "weight": 0.8
+            },
+            {
+                "level": "Senior",
+                "weight": 0.6
+            }
+        ],
+        "company_size": [
+            {
+                "range": "1-50",
+                "weight": 1.0
+            },
+            {
+                "range": "50-250",
+                "weight": 0.8
+            },
+            {
+                "range": "250-2000",
+                "weight": 0.6
+            }
+        ],
+        "work_mode": [
+            {
+                "mode": "Remote",
+                "weight": 1.0
+            },
+            {
+                "mode": "Onsite",
+                "weight": 0.6
+            },
+            {
+                "mode": "Hybrid",
+                "weight": 0.8
+            }
+        ],
+        "industries": "any",
+        "tech_stack_priority": [
+            {
+                "skill_id": "skill:typescript",
+                "weight": 1.0
+            },
+            {
+                "skill_id": "skill:nodejs",
+                "weight": 1.0
+            },
+            {
+                "skill_id": "skill:react",
+                "weight": 0.8
+            },
+            {
+                "skill_id": "skill:javascript",
+                "weight": 1.0
+            }
+        ]
+    },
+    "skills": [
+        {
+            "skill_id": "skill:typescript",
+            "name": "TypeScript",
+            "category": "language",
+            "level": "advanced",
+            "years": 1.0,
+            "last_used": "2025-09",
+            "primary": true
+        },
+        {
+            "skill_id": "skill:nodejs",
+            "name": "Node.js",
+            "category": "runtime",
+            "level": "advanced",
+            "years": 4.0,
+            "last_used": "2025-09",
+            "primary": true
+        },
+        {
+            "skill_id": "skill:react",
+            "name": "React",
+            "category": "framework",
+            "level": "advanced",
+            "years": 1.0,
+            "last_used": "2025-08",
+            "primary": true
+        },
+        {
+            "skill_id": "skill:javascript",
+            "name": "JavaScript",
+            "category": "language",
+            "level": "advanced",
+            "years": 1.0,
+            "last_used": "2025-09",
+            "primary": true
+        }
+    ],
+    "experience_summary": {
+        "years_total": 0.5,
+        "domains": [
+            "Web apps"
+        ],
+        "recent_titles": [
+            "Web Developer"
+        ],
+        "achievements": [
+            {
+                "tag": "Product relaunch",
+                "brief": "Integrated new booking process into existing website"
+            },
+            {
+                "tag": "Product launch",
+                "brief": "Developed a website for a lottery hosted by the sponsor of a Bundesliga football team"
+            }
+        ]
+    },
+    "education": [],
+    "certifications": [
+        {
+            "name": "Full-Stack Web Developer",
+            "issued": "2024-03",
+            "expires": null
+        }
+    ],
+    "languages_spoken": [
+        {
+            "language": "English",
+            "level": "B1"
+        },
+        {
+            "language": "German",
+            "level": "native"
+        }
+    ],
+    "exclusions": {
+        "avoid_roles": [
+            {
+                "title": "PHP Developer",
+                "hard": true
+            }
+        ],
+        "avoid_technologies": [
+            {
+                "name": "COBOL",
+                "hard": true
+            }
+        ],
+        "avoid_industries": []
+    },
+    "scoring_settings": {
+        "recency_decay": {
+            "half_life_months": 18
+        },
+        "skill_match": {
+            "primary_weight": 1.2,
+            "secondary_weight": 0.8
+        },
+        "location_distance_km_max": 30,
+        "salary_tolerance_percent": 5
+    }
+}
