@@ -302,8 +302,7 @@ class ApplicationAssistant {
             return safeCall<string[]>(
                 `writer.run(size=${jobsSubset.length})`,
                 async () => {
-                    const run = await this.runner.run<Agent<string>, { job: Job }>(writer, 'Write job application letters.');
-                    const letters = JSON.parse(run.finalOutput || '');
+                    const letters = JSON.parse((await this.runner.run<Agent<string>, { job: Job }>(writer, 'Write job application letters.')).finalOutput || '');
                     if (Array.isArray(letters) && letters.length === jobsSubset.length && letters.every(l => typeof l === 'string')) return letters;
                     throw new InvalidWriterOutputError();
                 },
