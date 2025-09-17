@@ -299,26 +299,29 @@ class ApplicationAssistant {
                 ]
             });
 
-            const execute = async () => {
-                const run = await this.runner.run<Agent<string>, { job: Job }>(writer, 'Write job application letters.');
-                const letters = JSON.parse(run.finalOutput || '');
-                if (Array.isArray(letters) && letters.length === jobsSubset.length && letters.every(l => typeof l === 'string')) return letters;
-                throw new InvalidWriterOutputError();
-            };
-            return safeCall<string[]>(`writer.run(size=${jobsSubset.length})`, execute, {
-                retries: maxRetries,
-                onRetry: ({ attempt, delayMs, reason }) => console.warn(`[writer] retry ${attempt}/${maxRetries} in ${delayMs}ms (${reason}) subset=${jobsSubset.length}`),
-                onRequestTooLarge: async () => {
-                    if (jobsSubset.length === 1) throw new Error('Single job subset too large');
-                    const mid = Math.floor(jobsSubset.length / 2);
-                    console.warn(`[writer] splitting subset ${jobsSubset.length} into ${mid} + ${jobsSubset.length - mid}`);
-                    const [a, b] = await Promise.all([
-                        runWriterForJobs(jobsSubset.slice(0, mid)),
-                        runWriterForJobs(jobsSubset.slice(mid))
-                    ]);
-                    return [...a, ...b];
+            return safeCall<string[]>(
+                `writer.run(size=${jobsSubset.length})`,
+                async () => {
+                    const run = await this.runner.run<Agent<string>, { job: Job }>(writer, 'Write job application letters.');
+                    const letters = JSON.parse(run.finalOutput || '');
+                    if (Array.isArray(letters) && letters.length === jobsSubset.length && letters.every(l => typeof l === 'string')) return letters;
+                    throw new InvalidWriterOutputError();
+                },
+                {
+                    retries: maxRetries,
+                    onRetry: ({ attempt, delayMs, reason }) => console.warn(`[writer] retry ${attempt}/${maxRetries} in ${delayMs}ms (${reason}) subset=${jobsSubset.length}`),
+                    onRequestTooLarge: async () => {
+                        if (jobsSubset.length === 1) throw new Error('Single job subset too large');
+                        const mid = Math.floor(jobsSubset.length / 2);
+                        console.warn(`[writer] splitting subset ${jobsSubset.length} into ${mid} + ${jobsSubset.length - mid}`);
+                        const [a, b] = await Promise.all([
+                            runWriterForJobs(jobsSubset.slice(0, mid)),
+                            runWriterForJobs(jobsSubset.slice(mid))
+                        ]);
+                        return [...a, ...b];
+                    }
                 }
-            });
+            );
         };
         return runWriterForJobs(this.jobs);
     }
