@@ -7,7 +7,8 @@ import path from 'path';
 import { ApifyClient } from 'apify-client';
 import { Agent, Runner, setTracingExportApiKey } from '@openai/agents';
 import { promptBuilder, normalizeWhitespace, safeCall } from './helpers.js';
-import { InvalidEvaluationOutputError, InvalidWriterOutputError, ParsingAfterScrapeError } from './errors.js';
+import { InvalidEvaluationOutputError, InvalidWriterOutputError, ParsingAfterScrapeError, SingleJobSubsetTooLargeError } from './errors.js';
+import { WriterAgent } from './writer.js';
 
 if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY environment variable not set');
 setTracingExportApiKey(process.env.OPENAI_API_KEY!);
@@ -128,13 +129,15 @@ class ApplicationAssistant {
      * This array contains the URLs to scrape for job vacancies.
      */
     private static scrapeUrls = fs.readFileSync(path.join(this.dataDir, 'scrapeUrls.txt'), 'utf8').split('\n').map(l => l.trim());
+
+    private static personalInformationPath = path.join(this.dataDir, 'personalInformation.json');
     /**
      * This string contains personal information and inspiration for writing application letters.
      * 
      * @remarks
      * Newlines are removed to ensure the prompt is a single continuous line.
      * 
-     * This string contains the content of the file located at {@link dataDir}/personalInformation.json.
+     * This string contains the content of the file located at {@link personalInformationPath}.
      * 
      * personalInformation.json should contain:
      * - Personal information such as name, contact details, and a brief bio.
@@ -144,7 +147,7 @@ class ApplicationAssistant {
      * 
      * This information will be used by the AI to tailor application letters to better match the user's profile and improve their chances of success.
      */
-    private static personalInformation: string = normalizeWhitespace(fs.readFileSync(path.join(this.dataDir, 'personalInformation.json'), 'utf8'));
+    private static personalInformation: string = normalizeWhitespace(fs.readFileSync(this.personalInformationPath, 'utf8'));
     /**
      * This directory is where the generated application letters will be saved. It also contains good and bad application letters for reference.
      */
@@ -237,92 +240,31 @@ class ApplicationAssistant {
      * The generated letters are tailored to the specific job vacancies being applied for.
      * Application letters are written in HTML with inline CSS.
      */
-    private static async writeApplications(): Promise<string[]> {
-        /**
-         * This {@link Agent} evaluates the quality of job application letters.
-         */
-        const evaluator = new Agent<string>({
-            name: 'responseEvaluator',
-            instructions: promptBuilder('evaluator'),
-            model: 'gpt-5-nano',
-            outputType: 'text',
-            handoffDescription: 'Evaluate the quality of a job application letter.'
-        });
-        /**
-         * This constant defines the maximum number of retry attempts for the writer agent in case of rate limiting errors.
-         */
-        const maxRetries = 5;
-
-        /**
-         * This function runs the writer agent to generate job application letters for a subset of job vacancies.
-         * @param jobsSubset A subset of job vacancies to generate application letters for.
-         * @returns An array of Job application letters for the provided subset of job vacancies.
-         * @throws {@link InvalidWriterOutputError}
-         * This exception is thrown if the writer agent does not return valid final output.
-         */
-        const runWriterForJobs = async (jobsSubset: Job[]): Promise<string[]> => {
-            /**
-             * This {@link Agent} generates job application letters based on the provided job vacancies and personal information.
-             * 
-             * @remarks
-             * The agent uses the {@link evaluator} tool to assess the quality of the generated letters.
-             */
-            const writer = new Agent<string>({
-                name: 'writer',
-                model: 'gpt-5',
-                outputType: 'text',
-                instructions: promptBuilder('writer', [
-                    ['{{PERSONAL_INFO}}', this.personalInformation],
-                    ['{{JOBS_SUBSET}}', JSON.stringify(jobsSubset)],
-                    ['{{JOBS_SUBSET_LENGTH}}', String(jobsSubset.length)]
-                ]),
-                tools: [
-                    evaluator.asTool({
-                        toolName: '#evaluation',
-                        toolDescription: 'Evaluate a single job application letter. Returns "good" or "bad".',
-                        customOutputExtractor:
-                            /**
-                             * This function extracts and validates the evaluation result from the output of the evaluator agent.
-                             * @param o The output from the evaluator agent.
-                             * @returns The evaluation result, either "good" or "bad".
-                             * @throws {@link InvalidEvaluationOutputError}
-                             */
-                            (o: unknown) => {
-                                /**
-                                 * This constant holds the evaluation result after processing the output from the evaluator agent.
-                                 */
-                                const evaluation = typeof o === 'string' && o.trim().toLowerCase();
-                                if (evaluation === 'good' || evaluation === 'bad') return evaluation;
-                                throw new InvalidEvaluationOutputError();
-                            }
-                    })
-                ]
-            });
-
-            return safeCall<string[]>(
-                `writer.run(size=${jobsSubset.length})`,
-                async () => {
-                    const letters = JSON.parse((await this.runner.run<Agent<string>, { job: Job }>(writer, 'Write job application letters.')).finalOutput || '');
-                    if (Array.isArray(letters) && letters.length === jobsSubset.length && letters.every(l => typeof l === 'string')) return letters;
-                    throw new InvalidWriterOutputError();
-                },
-                {
-                    retries: maxRetries,
-                    onRetry: ({ attempt, delayMs, reason }) => console.warn(`[writer] retry ${attempt}/${maxRetries} in ${delayMs}ms (${reason}) subset=${jobsSubset.length}`),
-                    onRequestTooLarge: async () => {
-                        if (jobsSubset.length === 1) throw new Error('Single job subset too large');
-                        const mid = Math.floor(jobsSubset.length / 2);
-                        console.warn(`[writer] splitting subset ${jobsSubset.length} into ${mid} + ${jobsSubset.length - mid}`);
-                        const [a, b] = await Promise.all([
-                            runWriterForJobs(jobsSubset.slice(0, mid)),
-                            runWriterForJobs(jobsSubset.slice(mid))
-                        ]);
-                        return [...a, ...b];
-                    }
+    private static async writeApplications(jobs: Job[] = this.jobs): Promise<string[]> {
+        const jl = jobs.length;
+        if (jl === 0) return [];
+        return safeCall<string[]>(
+            `writer.run(size=${jl})`,
+            async () => {
+                const letters = JSON.parse((await this.runner.run<Agent<string>, { job: Job }>(new WriterAgent(jobs, this.personalInformation), 'Write job application letters.')).finalOutput || '');
+                if (Array.isArray(letters) && letters.length === jl && letters.every(l => typeof l === 'string')) return letters;
+                throw new InvalidWriterOutputError();
+            },
+            {
+                retries: 5,
+                onRetry: ({ attempt, delayMs, reason }) => console.warn(`[writer] retry ${attempt}/5 in ${delayMs}ms (${reason}) subset=${jl}`),
+                onRequestTooLarge: async () => {
+                    if (jl === 1) throw new SingleJobSubsetTooLargeError();
+                    const mid = Math.floor(jobs.length / 2);
+                    console.warn(`[writer] splitting subset ${jl} into ${mid} + ${jl - mid}`);
+                    const [a, b] = await Promise.all([
+                        this.writeApplications(jobs.slice(0, mid)),
+                        this.writeApplications(jobs.slice(mid))
+                    ]);
+                    return [...a, ...b];
                 }
-            );
-        };
-        return runWriterForJobs(this.jobs);
+            }
+        );
     }
 
     /**
@@ -341,7 +283,7 @@ class ApplicationAssistant {
             [path.join(CWD, 'data'), 'Data directory does not exist'],
             [secretsDir, 'Secrets directory does not exist'],
             [this.applicationsDir, `Applications directory does not exist: ${this.applicationsDir}`],
-            [path.join(this.dataDir, 'resumeInspiration.txt'), `Resume inspiration file does not exist: ${path.join(this.dataDir, 'resumeInspiration.txt')}`],
+            [this.personalInformationPath, `Personal information file does not exist: ${this.personalInformationPath}`],
             [path.join(this.dataDir, 'scrapeUrls.txt'), `Scrape URLs file does not exist: ${path.join(this.dataDir, 'scrapeUrls.txt')}`]
         ];
         for (const [p, msg] of required) if (!fs.existsSync(p)) throw new Error(msg);

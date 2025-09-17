@@ -32,3 +32,13 @@ export class InvalidWriterOutputError extends Error {
         this.name = 'InvalidWriterOutputError';
     }
 }
+
+/**
+ * This error is thrown when a single job subset is too large to be processed by the writer agent.
+ */
+export class SingleJobSubsetTooLargeError extends Error {
+    constructor() {
+        super(`Single job subset too large.`);
+        this.name = 'SingleJobSubsetTooLargeError';
+    }
+}
