@@ -5,7 +5,7 @@ Inputs
 	•	JOB: {{JOB}}
 
 Normalization Rules
-	1.	Build a lowercase, ASCII-folded JOB_TEXT from: title, companyName, location, descriptionText, plus a text-stripped version of descriptionHtml. Collapse whitespace.
+	1.	Build a lowercase, ASCII-folded JOB_TEXT from: title, companyName, location, descriptionText. Collapse whitespace.
 	2.	Treat salary as unknown if it is an empty string. For salaryInfo, ignore empty strings and placeholders; otherwise parse any min/max numbers and currency tokens. If neither yields numbers, salary is unknown.
 	3.	Consider a role remote if any of these appear in JOB_TEXT or location: remote, work from home, anywhere, eu-remote, europe remote, distributed.
 	4.	Treat missing job fields as unknown; unknowns never auto-pass but also don’t auto-fail unless a rule says they do.
