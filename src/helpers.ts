@@ -4,7 +4,12 @@ import fs from 'fs';
 import { RECOMMENDED_PROMPT_PREFIX } from '@openai/agents-core/extensions';
 
 export function normalizeWhitespace(input: string) {
-    return input.replace(/\r/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n\n').trim();
+    return input
+        .replace(/\r/g, '')
+        .replace(/ {2,}/g, ' ')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n{2,}/g, '\n\n')
+        .trim();
 }
 export function promptBuilder(agentType: 'filter' | 'writer' | 'evaluator', additionalPlaceholders: Array<[string, string]> = []): string {
     const readApps = (kind: 'good' | 'bad') => {

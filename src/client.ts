@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { ApifyClient } from 'apify-client';
 import { Agent, Runner, setTracingExportApiKey } from '@openai/agents';
-import { normalizeWhitespace, safeCall } from './helpers.js';
+import { safeCall } from './helpers.js';
 import { InvalidFilterOutputError, InvalidWriterOutputError, ParsingAfterScrapeError, SingleJobSubsetTooLargeError } from './errors.js';
 import { WriterAgent } from './writer.js';
 import { FilterAgent } from './filter.js';
@@ -148,7 +148,7 @@ class ApplicationAssistant {
      * 
      * This information will be used by the AI to tailor application letters to better match the user's profile and improve their chances of success.
      */
-    private static personalInformation: string = normalizeWhitespace(fs.readFileSync(this.personalInformationPath, 'utf8'));
+    private static personalInformation: string = fs.readFileSync(this.personalInformationPath, 'utf8').replace(/(\r\n|\n|\r| {2,})/g, '');
     /**
      * This directory is where the generated application letters will be saved. It also contains good and bad application letters for reference.
      */
