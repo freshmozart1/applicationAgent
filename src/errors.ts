@@ -42,3 +42,10 @@ export class SingleJobSubsetTooLargeError extends Error {
         this.name = 'SingleJobSubsetTooLargeError';
     }
 }
+
+export class InvalidFilterOutputError extends Error {
+    constructor() {
+        super('Filter did not return valid output.');
+        this.name = 'InvalidFilterOutputError';
+    }
+}

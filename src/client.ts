@@ -6,9 +6,10 @@ import fs from 'fs';
 import path from 'path';
 import { ApifyClient } from 'apify-client';
 import { Agent, Runner, setTracingExportApiKey } from '@openai/agents';
-import { promptBuilder, normalizeWhitespace, safeCall } from './helpers.js';
-import { InvalidEvaluationOutputError, InvalidWriterOutputError, ParsingAfterScrapeError, SingleJobSubsetTooLargeError } from './errors.js';
+import { normalizeWhitespace, safeCall } from './helpers.js';
+import { InvalidFilterOutputError, InvalidWriterOutputError, ParsingAfterScrapeError, SingleJobSubsetTooLargeError } from './errors.js';
 import { WriterAgent } from './writer.js';
+import { FilterAgent } from './filter.js';
 
 if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY environment variable not set');
 setTracingExportApiKey(process.env.OPENAI_API_KEY!);
@@ -201,28 +202,22 @@ class ApplicationAssistant {
      * @returns A promise that resolves to an array of job vacancies that are deemed suitable for application.
      */
     private static async filterJobs(): Promise<Job[]> {
-        /**
-         * This array holds the job vacancies that were scraped by the LinkedIn jobs scraper.
-         */
-        const scrapedJobs: Job[] = await this.scrapeJobs();
-        /**
-         * This array holds the job vacancies that are deemed suitable for application after filtering.
-         */
-        const filteredJobs: Job[] = [];
-        for (const job of scrapedJobs) {
-            /**
-             * This agent is responsible for filtering job vacancies.
-             */
-            const filterAgent = new Agent<unknown, 'text'>({
-                name: 'jobFilterAgent',
-                model: 'gpt-5-nano',
-                instructions: promptBuilder('filter', [['{{PERSONAL_INFO}}', this.personalInformation], ['{{JOB}}', JSON.stringify(job)]]),
-                outputType: 'text',
-            });
-            const run = await this.runner.run<Agent<unknown, 'text'>, 'text'>(filterAgent, `Evaluate the following job vacancy: ${JSON.stringify(job)}`);
-            if (run.finalOutput && run.finalOutput.trim().toLowerCase() === 'true') filteredJobs.push(job);
-        }
-        return filteredJobs;
+        return await Promise.all((await this.scrapeJobs())
+            .map(async (job: Job) => safeCall<Job | null>(
+                `filter.run(jobId=${job.id})`,
+                async () => {
+                    const decision = (await this.runner.run<Agent<unknown, 'text'>, 'text'>(new FilterAgent(this.personalInformation, job), `Evaluate the following job vacancy: ${JSON.stringify(job)}`)).finalOutput?.trim().toLowerCase();
+                    if (decision === 'true') return job;
+                    if (decision === 'false') return null;
+                    throw new InvalidFilterOutputError();
+                },
+                {
+                    retries: 20,
+                    onRetry: ({ attempt, delayMs, reason }) => console.warn(`[filter] retry ${attempt}/20 in ${delayMs}ms (${reason}) jobId=${job.id}`),
+                    onRequestTooLarge: () => { throw new Error('Job object too large for filter agent'); }
+                }
+            )))
+            .then(results => results.filter((job): job is Job => job !== null));
     }
 
     /**
