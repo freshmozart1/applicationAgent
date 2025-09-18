@@ -55,6 +55,10 @@
         ],
         "seniority": [
             {
+                "level": "Entry level",
+                "weight": 1.0
+            },
+            {
                 "level": "Junior",
                 "weight": 1.0
             },
@@ -95,27 +99,36 @@
                 "weight": 0.8
             }
         ],
-        "industries": "any",
-        "tech_stack_priority": [
-            {
-                "skill_id": "skill:typescript",
-                "weight": 1.0
-            },
-            {
-                "skill_id": "skill:nodejs",
-                "weight": 1.0
-            },
-            {
-                "skill_id": "skill:react",
-                "weight": 0.8
-            },
-            {
-                "skill_id": "skill:javascript",
-                "weight": 1.0
-            }
-        ]
+        "industries": "any"
     },
     "skills": [
+        {
+            "skill_id": "skill:html",
+            "name": "HTML",
+            "category": "language",
+            "level": "advanced",
+            "years": 3.0,
+            "last_used": "2025-09",
+            "primary": true
+        },
+        {
+            "skill_id": "skill:css",
+            "name": "CSS",
+            "category": "language",
+            "level": "advanced",
+            "years": 3.0,
+            "last_used": "2025-09",
+            "primary": true
+        },
+        {
+            "skill_id": "skill:sass",
+            "name": "Sass",
+            "category": "language",
+            "level": "intermediate",
+            "years": 1.0,
+            "last_used": "2025-09",
+            "primary": false
+        },
         {
             "skill_id": "skill:typescript",
             "name": "TypeScript",
@@ -194,6 +207,10 @@
         "avoid_roles": [
             {
                 "title": "PHP Developer",
+                "hard": true
+            },
+            {
+                "title": "Werkstudent",
                 "hard": true
             }
         ],
