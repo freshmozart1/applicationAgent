@@ -206,7 +206,23 @@ class ApplicationAssistant {
             .map(async (job: Job) => safeCall<Job | null>(
                 `filter.run(jobId=${job.id})`,
                 async () => {
-                    const decision = (await this.runner.run<Agent<unknown, 'text'>, 'text'>(new FilterAgent(this.personalInformation, job), `Evaluate the following job vacancy: ${JSON.stringify(job)}`)).finalOutput?.trim().toLowerCase();
+                    const strippedJob = {
+                        title: job.title,
+                        companyName: job.companyName,
+                        location: job.location,
+                        descriptionText: job.descriptionText,
+                        salaryInfo: job.salaryInfo,
+                        salary: job.salary,
+                        industries: job.industries,
+                        employmentType: job.employmentType,
+                        seniorityLevel: job.seniorityLevel,
+                        companySize: job.companyEmployeesCount
+                    };
+                    const decision = (await this.runner.run<Agent<unknown, 'text'>, 'text'>(
+                        new FilterAgent(this.personalInformation, strippedJob),
+                        `Evaluate the following job vacancy: ${JSON.stringify(strippedJob)}`)
+                    )
+                        .finalOutput?.trim().toLowerCase();
                     if (decision === 'true') return job;
                     if (decision === 'false') return null;
                     throw new InvalidFilterOutputError();

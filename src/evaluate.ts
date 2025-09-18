@@ -59,10 +59,6 @@ type PersonalInformation = {
             weight: number
         }[];
         industries: 'any' | string[];
-        tech_stack_priority: {
-            skill_id: string;
-            weight: number
-        }[]
     };
     skills: {
         skill_id: string;
