@@ -20,19 +20,6 @@ setTracingExportApiKey(process.env.OPENAI_API_KEY!);
 const CWD = process.cwd();
 
 /**
- * This interface represents a postal address as it is returned by the LinkedIn jobs scraper.
- * All fields are optional and can be null, as the scraper may not always provide complete address information.
- */
-interface PostalAddress {
-    type?: 'PostalAddress' | string | null;
-    streetAddress?: string | null;
-    addressLocality?: string | null;
-    addressRegion?: string | null;
-    postalCode?: string | null;
-    addressCountry?: string | null;
-}
-
-/**
  * This is a {@link https://zod.dev | Zod} schema for validating a {@link PostalAddress}.
  */
 const ZPostalAddress = z.object({

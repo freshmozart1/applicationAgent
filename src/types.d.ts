@@ -110,6 +110,15 @@ type PersonalInformation = {
     }
 };
 
+type PostalAddress = {
+    type?: 'PostalAddress' | string | null;
+    streetAddress?: string | null;
+    addressLocality?: string | null;
+    addressRegion?: string | null;
+    postalCode?: string | null;
+    addressCountry?: string | null;
+};
+
 type Job = {
     id: string;
     trackingId: string;
