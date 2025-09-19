@@ -45,40 +45,6 @@ const ZPostalAddress = z.object({
 });
 
 /**
- * This interface represents a job vacancy as it is returned by the LinkedIn jobs scraper.
- * Some fields are optional and can be undefined, as the scraper may not always provide complete information.
- */
-export interface Job {
-    id: string;
-    trackingId: string;
-    refId: string;
-    link: string;
-    title: string;
-    companyName: string;
-    companyLinkedinUrl: string;
-    companyLogo: string;
-    companyEmployeesCount?: number | undefined;
-    location: string;
-    postedAt: string;
-    salaryInfo: string[];
-    salary: string;
-    benefits: string[];
-    descriptionHtml: string;
-    applicantsCount: number | string;
-    applyUrl: string;
-    descriptionText: string;
-    seniorityLevel?: string | undefined;
-    employmentType: string;
-    jobFunction?: string | undefined;
-    industries?: string | undefined;
-    inputUrl: string;
-    companyAddress?: PostalAddress | undefined;
-    companyWebsite?: string | undefined;
-    companySlogan?: string | null | undefined;
-    companyDescription?: string | undefined;
-};
-
-/**
  * This is a {@link https://zod.dev | Zod} schema for validating a {@link Job}.
  */
 const ZJob = z.object({

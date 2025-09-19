@@ -52,28 +52,6 @@ export function promptBuilder(agentType: 'filter' | 'writer' | 'evaluator', addi
     ].reduce((prev, [ph, val]) => prev.replaceAll(ph, val), instructions[agentType]);
 }
 
-type RetryOptions = {
-    retries?: number;
-    baseDelayMs?: number;
-    maxDelayMs?: number;
-    jitterRatio?: number;
-    retryOn?: (info: {
-        status: number | null;
-        error: unknown;
-        attempt: number;
-    }) => boolean;
-    onRetry?: (info: {
-        attempt: number;
-        delayMs: number;
-        reason: string;
-    }) => void;
-    /**
-     * Optional handler invoked when the error message contains 'request too large'.
-     * Should perform domain-specific splitting and return combined result.
-     */
-    onRequestTooLarge?: () => Promise<any>;
-};
-
 const DEFAULT_RETRYABLE_STATUS = (status: number | null) => status === 429 || status === null || (status >= 500 && status < 600);
 
 function extractSuggestedDelayMs(err: unknown): number | null {

@@ -1,7 +1,6 @@
 /**
  * This module defines custom error classes for the application.
  */
-import { Job } from "./client.js";
 import z from "zod";
 /**
  * This error is thrown when {@link https://zod.dev | Zod} cannot parse the jobs returned by the LinkedIn jobs scraper.

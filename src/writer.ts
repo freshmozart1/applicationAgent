@@ -1,6 +1,5 @@
 import { Agent } from "@openai/agents";
 import { promptBuilder } from "./helpers.js";
-import { Job } from "./client.js";
 import { InvalidEvaluationOutputError } from "./errors.js";
 
 export class WriterAgent extends Agent<string> {
