@@ -10,6 +10,7 @@ import { safeCall } from './helpers.js';
 import { InvalidFilterOutputError, InvalidWriterOutputError, ParsingAfterScrapeError, SingleJobSubsetTooLargeError } from './errors.js';
 import { WriterAgent } from './writer.js';
 import { FilterAgent } from './filter.js';
+import { ZJob } from './schemas.js';
 
 if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY environment variable not set');
 setTracingExportApiKey(process.env.OPENAI_API_KEY!);
@@ -18,51 +19,6 @@ setTracingExportApiKey(process.env.OPENAI_API_KEY!);
  * This constant holds the current working directory of the Node process.
  */
 const CWD = process.cwd();
-
-/**
- * This is a {@link https://zod.dev | Zod} schema for validating a {@link PostalAddress}.
- */
-const ZPostalAddress = z.object({
-    type: z.string().optional().nullable(),
-    streetAddress: z.string().optional().nullable(),
-    addressLocality: z.string().optional().nullable(),
-    addressRegion: z.string().optional().nullable(),
-    postalCode: z.string().optional().nullable(),
-    addressCountry: z.string().optional().nullable(),
-});
-
-/**
- * This is a {@link https://zod.dev | Zod} schema for validating a {@link Job}.
- */
-const ZJob = z.object({
-    id: z.string(),
-    trackingId: z.string(),
-    refId: z.string(),
-    link: z.string(),
-    title: z.string(),
-    companyName: z.string(),
-    companyLinkedinUrl: z.string(),
-    companyLogo: z.string(),
-    companyEmployeesCount: z.optional(z.number()),
-    location: z.string(),
-    postedAt: z.string(),
-    salaryInfo: z.array(z.string()),
-    salary: z.string(),
-    benefits: z.array(z.string()),
-    descriptionHtml: z.string(),
-    applicantsCount: z.union([z.number(), z.string()]),
-    applyUrl: z.string(),
-    descriptionText: z.string(),
-    seniorityLevel: z.optional(z.string()),
-    employmentType: z.string(),
-    jobFunction: z.optional(z.string()),
-    industries: z.optional(z.string()),
-    inputUrl: z.string(),
-    companyAddress: z.optional(ZPostalAddress),
-    companyWebsite: z.optional(z.string()),
-    companySlogan: z.optional(z.string()).nullable(),
-    companyDescription: z.optional(z.string()),
-});
 
 /**
  * The ApplicationAssistant class encapsulates the functionality to scrape job vacancies from LinkedIn,
