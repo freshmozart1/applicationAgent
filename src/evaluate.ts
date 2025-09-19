@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
 import { promptBuilder, safeCall } from "./helpers.js";
+import { JobEvalSchema } from "./schemas.js";
 
 const openai = new OpenAI();
 let personal: PersonalInformation;
@@ -39,166 +40,7 @@ if (!jobEvalId) {
         name: jobEvalName,
         data_source_config: {
             type: 'custom',
-            item_schema: {
-                "type": "object",
-                "properties": {
-                    "fits": {
-                        "type": "string"
-                    },
-                    "job": {
-                        "type": "object",
-                        "properties": {
-                            "id": {
-                                "type": "string"
-                            },
-                            "trackingId": {
-                                "type": "string"
-                            },
-                            "refId": {
-                                "type": "string"
-                            },
-                            "link": {
-                                "type": "string"
-                            },
-                            "title": {
-                                "type": "string"
-                            },
-                            "companyName": {
-                                "type": "string"
-                            },
-                            "companyLinkedinUrl": {
-                                "type": "string"
-                            },
-                            "companyLogo": {
-                                "type": "string"
-                            },
-                            "location": {
-                                "type": "string"
-                            },
-                            "salaryInfo": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                }
-                            },
-                            "postedAt": {
-                                "type": "string"
-                            },
-                            "benefits": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                }
-                            },
-                            "descriptionHtml": {
-                                "type": "string"
-                            },
-                            "applicantsCount": {
-                                "type": "string"
-                            },
-                            "applyUrl": {
-                                "type": "string"
-                            },
-                            "salary": {
-                                "type": "string"
-                            },
-                            "descriptionText": {
-                                "type": "string"
-                            },
-                            "seniorityLevel": {
-                                "type": "string"
-                            },
-                            "employmentType": {
-                                "type": "string"
-                            },
-                            "jobFunction": {
-                                "type": "string"
-                            },
-                            "industries": {
-                                "type": "string"
-                            },
-                            "inputUrl": {
-                                "type": "string"
-                            },
-                            "companyAddress": {
-                                "type": "object",
-                                "properties": {
-                                    "type": {
-                                        "type": "string"
-                                    },
-                                    "streetAddress": {
-                                        "type": "string"
-                                    },
-                                    "addressLocality": {
-                                        "type": "string"
-                                    },
-                                    "addressRegion": {
-                                        "type": "string"
-                                    },
-                                    "postalCode": {
-                                        "type": "string"
-                                    },
-                                    "addressCountry": {
-                                        "type": "string"
-                                    }
-                                },
-                                "required": [
-                                    "addressCountry",
-                                    "addressLocality",
-                                    "postalCode",
-                                    "streetAddress",
-                                    "type"
-                                ]
-                            },
-                            "companyWebsite": {
-                                "type": "string"
-                            },
-                            "companySlogan": {
-                                "type": "string"
-                            },
-                            "companyDescription": {
-                                "type": "string"
-                            },
-                            "companyEmployeesCount": {
-                                "type": "integer"
-                            }
-                        },
-                        "required": [
-                            "applicantsCount",
-                            "applyUrl",
-                            "benefits",
-                            "companyAddress",
-                            "companyDescription",
-                            "companyEmployeesCount",
-                            "companyLinkedinUrl",
-                            "companyLogo",
-                            "companyName",
-                            "companySlogan",
-                            "companyWebsite",
-                            "descriptionHtml",
-                            "descriptionText",
-                            "employmentType",
-                            "id",
-                            "industries",
-                            "inputUrl",
-                            "jobFunction",
-                            "link",
-                            "location",
-                            "postedAt",
-                            "refId",
-                            "salary",
-                            "salaryInfo",
-                            "seniorityLevel",
-                            "title",
-                            "trackingId"
-                        ]
-                    }
-                },
-                "required": [
-                    "fits",
-                    "job"
-                ]
-            },
+            item_schema: JobEvalSchema,
             include_sample_schema: true
         },
         testing_criteria: [{
@@ -236,7 +78,6 @@ if (jobEvalId) {
             }
         }
     }));
-    console.log('Error: ', evalRun.error);
 }
 else {
     console.error('No evaluation ID found, cannot create evaluation run');
