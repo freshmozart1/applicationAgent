@@ -14,83 +14,84 @@ try {
     process.exit(1);
 }
 
-const testDataFilename = 'jobVacancyTestData.jsonl';
-
-const evalFileList = await safeCall('files.list(evals)', () => openai.files.list({
-    purpose: 'evals'
-}));
-
-const foundTestData = evalFileList.data.find(f => f.filename === testDataFilename);
-if (foundTestData) {
-    try {
-        await safeCall('files.delete(old test data)', () => openai.files.delete(foundTestData.id));
-    } catch (err) {
-        console.warn('Failed to delete old test data file, continuing anyway:', err);
+const testFilePath = path.join(process.cwd(), 'data/filterTestData.json');
+if (!fs.existsSync(testFilePath)) throw new Error('Test data file not found: ' + testFilePath);
+const testData: { fits: boolean, job: Job }[] = JSON.parse(fs.readFileSync(testFilePath, 'utf8')) as { fits: boolean, job: Job }[];
+if (!Array.isArray(testData)) throw new Error('Test data is not an array in file: ' + testFilePath);
+for (let item of testData) {
+    const parseResult = JobEvalSchema.safeParse(item);
+    if (!parseResult.success) {
+        throw new Error('Test data item does not conform to schema: ' + JSON.stringify(parseResult.error.issues));
     }
 }
-const testData = await safeCall('files.create(test data)', () => openai.files.create({
-    file: fs.createReadStream(path.join(process.cwd(), testDataFilename)),
-    purpose: 'evals'
-}));
-const evalList = await safeCall('evals.list', () => openai.evals.list());
+
+for (const file of (await openai.files.list({ purpose: 'evals' })).data) {
+    if (file.filename.startsWith('jobEval') && file.filename.endsWith('.jsonl')) openai.files.delete(file.id);
+}
+
 const jobEvalName = 'Job Vacancy Evaluation';
-let jobEvalId = evalList.data.find(f => f.name === jobEvalName)?.id;
+const evalList = await openai.evals.list();
+let jobEvalId = evalList.data.find(e => e.name === jobEvalName)?.id;
+const chunkSize = 16;
+
 if (!jobEvalId) {
-    const created = await safeCall('evals.create(Job Vacancy Evaluation)', () => openai.evals.create({
+    jobEvalId = (await openai.evals.create({
         name: jobEvalName,
         data_source_config: {
             type: 'custom',
-            item_schema: JobEvalSchema,
+            item_schema: JobEvalSchema.shape,
             include_sample_schema: true
         },
         testing_criteria: [{
-            type: "string_check",
+            type: 'string_check',
             name: jobEvalName,
-            operation: "eq",
+            operation: 'eq',
             input: '{{ sample.output_text }}',
             reference: '{{ item.fits }}'
         }]
-    }));
-    jobEvalId = created.id;
-    console.log('Created new evaluation:', jobEvalId);
+    })).id;
 }
 
 if (jobEvalId) {
-    const evalRun = await safeCall('evals.runs.create', () => openai.evals.runs.create(jobEvalId, {
-        name: jobEvalName + 'Run',
-        data_source: {
-            type: 'responses',
-            model: 'gpt-5-nano',
-            input_messages: {
-                type: 'template',
-                template: [
-                    {
-                        role: 'developer', content: promptBuilder('filter', [['{{PERSONAL_INFO}}', JSON.stringify(personal)], ['{{JOB}}', '{{item.job}}']])
+    for (let i = 0; i < testData.length; i += chunkSize) {
+        const chunk = testData.slice(i, i + chunkSize);
+        const tmpName = path.join(process.cwd(), `jobEval${Math.floor(i / chunkSize)}.jsonl`); // short file name
+        fs.writeFileSync(
+            tmpName,
+            chunk.reduce((acc, item, index) => `${acc}{"item":${JSON.stringify(item)}}${index < chunk.length - 1 ? '\n' : ''}`, ''),
+            'utf8');
+        try {
+            const file = await openai.files.create({
+                file: fs.createReadStream(tmpName),
+                purpose: 'evals'
+            });
+            console.log('Uploaded eval file:', file.id, file.filename);
+            setTimeout(async () => await openai.evals.runs.create(jobEvalId, {
+                name: `${jobEvalName} Run ${Math.floor(i / chunkSize) + 1}`,
+                data_source: {
+                    type: 'responses',
+                    model: 'gpt-5-nano',
+                    input_messages: {
+                        type: 'template',
+                        template: [
+                            {
+                                role: 'system', content: promptBuilder('filter', [['{{PERSONAL_INFO}}', JSON.stringify(personal)], ['{{JOB}}', '{{item.job}}']])
+                            },
+                            {
+                                role: 'user', content: `Evaluate the following job vacancy: {{item.job}}`
+                            }
+                        ]
                     },
-                    {
-                        role: 'user', content: `Evaluate the following job vacancy: {{item.job}}`
+                    source: {
+                        type: 'file_id',
+                        id: file.id
                     }
-                ]
-            },
-            source: {
-                type: 'file_id',
-                id: testData.id
-            }
+                }
+            }), Math.floor(i / chunkSize) > 0 ? 60000 : 0);
+        } catch (err) {
+            console.error('Running evaluation failed:', err);
+        } finally {
+            try { fs.unlinkSync(tmpName); } catch { }
         }
-    }));
+    }
 }
-else {
-    console.error('No evaluation ID found, cannot create evaluation run');
-    process.exit(1);
-}
-
-// let jobEvalRunResponse;
-// do {
-//     jobEvalRunResponse = await openai.evals.runs.retrieve(jobEvalRun.id, {
-//         eval_id: jobEvalId
-//     });
-//     console.log(`Job vacancy filter evaluation run status: ${jobEvalRunResponse.status}`);
-// } while (jobEvalRunResponse.status === 'queued' || jobEvalRunResponse.status === 'in_progress');
-// console.log('Job vacancy filter evaluation run finished:', jobEvalRunResponse.result_counts);
-// console.log(jobEvalRunResponse.result_counts.passed / jobEvalRunResponse.result_counts.total * 100 + '% passed');
-// console.log(`Visit https://platform.openai.com/evaluations/${jobEvalId}/data?run_id=${jobEvalRun.id} for more information`);
