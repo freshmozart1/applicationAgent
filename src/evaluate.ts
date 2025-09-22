@@ -53,6 +53,7 @@ if (!jobEvalId) {
 }
 
 if (jobEvalId) {
+    const fileIdStack: string[] = [];
     for (let i = 0; i < testData.length; i += chunkSize) {
         const chunk = testData.slice(i, i + chunkSize);
         const tmpName = path.join(process.cwd(), `jobEval${Math.floor(i / chunkSize)}.jsonl`); // short file name
@@ -66,8 +67,23 @@ if (jobEvalId) {
                 purpose: 'evals'
             });
             console.log('Uploaded eval file:', file.id, file.filename);
-            setTimeout(async () => await openai.evals.runs.create(jobEvalId, {
-                name: `${jobEvalName} Run ${Math.floor(i / chunkSize) + 1}`,
+            fileIdStack.push(file.id);
+        } catch (err) {
+            console.error('Uploading evaluation file failed:', err);
+        } finally {
+            try { fs.unlinkSync(tmpName); } catch { }
+        }
+    }
+
+    const pollIntervalMs = 3000;
+
+    for (let index = 0; index < fileIdStack.length; index++) {
+        const fileId = fileIdStack[index];
+        console.log('Starting run for file:', fileId);
+        let runId: string | undefined;
+        try {
+            runId = (await openai.evals.runs.create(jobEvalId, {
+                name: `${jobEvalName} Run ${index + 1}`,
                 data_source: {
                     type: 'responses',
                     model: 'gpt-5-nano',
@@ -75,23 +91,43 @@ if (jobEvalId) {
                         type: 'template',
                         template: [
                             {
-                                role: 'system', content: promptBuilder('filter', [['{{PERSONAL_INFO}}', JSON.stringify(personal)], ['{{JOB}}', '{{item.job}}']])
+                                role: 'system',
+                                content: promptBuilder('filter', [
+                                    ['{{PERSONAL_INFO}}', JSON.stringify(personal)],
+                                    ['{{JOB}}', '{{item.job}}']
+                                ])
                             },
                             {
-                                role: 'user', content: `Evaluate the following job vacancy: {{item.job}}`
+                                role: 'user',
+                                content: `Evaluate the following job vacancy: {{item.job}}`
                             }
                         ]
                     },
                     source: {
                         type: 'file_id',
-                        id: file.id
+                        id: fileId
                     }
                 }
-            }), Math.floor(i / chunkSize) > 0 ? 60000 : 0);
+            })).id;
+            console.log('Run created:', runId);
         } catch (err) {
-            console.error('Running evaluation failed:', err);
-        } finally {
-            try { fs.unlinkSync(tmpName); } catch { }
+            console.error('Failed to create run for file:', fileId, err);
+            continue;
+        }
+
+        // Poll until run finishes
+        while (true) {
+            try {
+                const run = await openai.evals.runs.retrieve(runId!, { eval_id: jobEvalId });
+                if (run.status === 'completed' || run.status === 'failed') {
+                    console.log(`Run ${runId} finished with status:`, run.status);
+                    break;
+                }
+                console.log(`Run ${runId} status: ${run.status} (waiting ${pollIntervalMs}ms)`);
+            } catch (err) {
+                console.error('Error retrieving run status, will retry:', err);
+            }
+            await new Promise(r => setTimeout(r, pollIntervalMs));
         }
     }
 }
