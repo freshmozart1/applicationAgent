@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { promptBuilder } from "./helpers.js";
 import { JobEvalSchema } from "./schemas.js";
-import { readJSON } from "./helpers.js";
+import { readJSON, sleep } from "./helpers.js";
 
 const openai = new OpenAI();
 const root = process.cwd();
@@ -45,8 +45,6 @@ const evalId =
     })).id;
 
 for (let i = 0; i < testData.length; i += chunkSize) chunks.push(testData.slice(i, i + chunkSize));
-
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 for (const [i, fileId] of (
     await Promise.all(chunks.map(async (chunk, i) => {
