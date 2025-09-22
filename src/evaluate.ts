@@ -51,14 +51,11 @@ for (const [i, fileId] of (
         const tmp = path.join(root, `jobEval${i}.jsonl`);
         fs.writeFileSync(tmp, chunk.map(item => `{"item":${JSON.stringify(item)}}`).join("\n"));
         try {
-            const f = await openai.files.create({ file: fs.createReadStream(tmp), purpose: "evals" });
-            return f.id;
+            return (await openai.files.create({ file: fs.createReadStream(tmp), purpose: "evals" })).id;
         } catch (e) {
             console.error("Upload failed:", e);
         } finally {
-            try {
-                fs.unlinkSync(tmp);
-            } catch { }
+            fs.unlinkSync(tmp);
         }
     }))
 ).filter((x): x is string => !!x).entries()) {
