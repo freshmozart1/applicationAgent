@@ -24,8 +24,8 @@ Requirements for each letter:
 Quality Gate (per letter):
 1. Draft letter.
 2. Call #evaluation tool with ONLY that letter.
-3. If "bad", improve and re-evaluate.
-4. Repeat until "good".
+3. If #evaluation tool returns "bad", improve and re-evaluate.
+4. Repeat until #evaluation tool returns "good".
 5. Only then include final letter in output array.
 
 Output Format:
