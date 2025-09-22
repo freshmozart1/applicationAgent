@@ -139,3 +139,5 @@ export async function safeCall<T>(context: string, fn: () => Promise<T>, opts: R
         }
     }
 }
+
+export const readJSON = <T>(p: string, options: { encoding: BufferEncoding, flag?: string | undefined } | BufferEncoding = 'utf8') => JSON.parse(fs.readFileSync(p, options)) as T;

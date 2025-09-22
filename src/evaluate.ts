@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { promptBuilder } from "./helpers.js";
 import { JobEvalSchema } from "./schemas.js";
+import { readJSON } from "./helpers.js";
 
 const openai = new OpenAI();
 const root = process.cwd();
@@ -10,7 +11,7 @@ const testDataPath = path.join(root, "data/filterTestData.json");
 const evalName = "Job Vacancy Evaluation";
 const chunkSize = 16;
 const chunks: typeof testData[] = [];
-const readJSON = <T>(p: string, options: { encoding: BufferEncoding, flag?: string | undefined } | BufferEncoding = 'utf8') => JSON.parse(fs.readFileSync(p, options)) as T;
+
 let personal: PersonalInformation;
 try {
     personal = readJSON<PersonalInformation>(path.join(root, "data/personalInformation.json"));
