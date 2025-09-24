@@ -1,4 +1,4 @@
-import { Agent } from "@openai/agents";
+import { Agent, webSearchTool } from "@openai/agents";
 import { promptBuilder } from "./helpers.js";
 import { InvalidEvaluationOutputError } from "./errors.js";
 
@@ -11,9 +11,20 @@ export class WriterAgent extends Agent<string> {
                 ['{{JOBS_SUBSET}}', JSON.stringify(jobVacancies)],
                 ['{{JOBS_SUBSET_LENGTH}}', String(jobVacancies.length)]
             ]),
-            model: 'gpt-5-nano',
+            model: 'gpt-5',
             outputType: 'text',
             tools: [
+                webSearchTool({
+                    name: '#webSearch',
+                    searchContextSize: 'medium',
+                    userLocation: {
+                        city: 'Hamburg',
+                        region: 'Hamburg',
+                        country: 'DE',
+                        timezone: 'Europe/Berlin',
+                        type: 'approximate'
+                    }
+                }),
                 (new Agent<string>({
                     name: 'responseEvaluator',
                     instructions: promptBuilder('evaluator'),
