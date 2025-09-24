@@ -1,6 +1,18 @@
-import { Agent, webSearchTool } from "@openai/agents";
-import { promptBuilder } from "./helpers.js";
+import { Agent, webSearchTool, tool, Runner } from "@openai/agents";
+import { promptBuilder, safeCall } from "./helpers.js";
 import { InvalidEvaluationOutputError } from "./errors.js";
+import { EvaluationToolSchema } from "./schemas.js";
+
+class EvaluatorAgent extends Agent<string> {
+    constructor() {
+        super({
+            name: 'responseEvaluator',
+            instructions: promptBuilder('evaluator'),
+            model: 'gpt-5-nano',
+            outputType: 'text',
+        });
+    }
+}
 
 export class WriterAgent extends Agent<string> {
     constructor(jobVacancy: Job, personalInformation: string) {
@@ -10,7 +22,7 @@ export class WriterAgent extends Agent<string> {
                 ['{{PERSONAL_INFO}}', personalInformation],
                 ['{{JOB}}', JSON.stringify(jobVacancy)]
             ]),
-            model: 'gpt-5-mini',
+            model: 'gpt-5-nano',
             outputType: 'text',
             tools: [
                 webSearchTool({
@@ -24,31 +36,22 @@ export class WriterAgent extends Agent<string> {
                         type: 'approximate'
                     }
                 }),
-                (new Agent<string>({
-                    name: 'responseEvaluator',
-                    instructions: promptBuilder('evaluator'),
-                    model: 'gpt-5-nano',
-                    outputType: 'text',
-                    handoffDescription: 'Evaluate the quality of a job application letter.'
-                })).asTool({
-                    toolName: '#evaluation',
-                    toolDescription: 'Evaluate a single job application letter. Returns "good" or "bad".',
-                    customOutputExtractor:
-                        /**
-                         * This function extracts and validates the evaluation result from the output of the evaluator agent.
-                         * @param o The output from the evaluator agent.
-                         * @returns The evaluation result, either "good" or "bad".
-                         * @throws {@link InvalidEvaluationOutputError}
-                         */
-                        (o: unknown) => {
-                            /**
-                             * This constant holds the evaluation result after processing the output from the evaluator agent.
-                             */
-                            if (typeof o !== 'string') throw new Error('Unexpected non-string output from evaluator agent.');
-                            const evaluation = o.trim().toLowerCase();
-                            if (evaluation === 'good' || evaluation === 'bad') return evaluation;
-                            throw new InvalidEvaluationOutputError();
-                        }
+                tool({
+                    name: '#evaluation',
+                    description: 'Evaluate the quality of a job application letter.',
+                    parameters: EvaluationToolSchema,
+                    async execute({ letter }: { letter: string }) {
+                        const evaluationOutput = (await safeCall(
+                            `writer.evaluate`,
+                            () => (new Runner({ workflowName: 'applicationAssistant' }))
+                                .run(
+                                    new EvaluatorAgent(),
+                                    `Evaluate the following job application letter:\n\n${letter}\n\nReturn "good" or "bad".`
+                                )
+                        )).finalOutput;
+                        if (evaluationOutput !== 'good' && evaluationOutput !== 'bad') throw new InvalidEvaluationOutputError();
+                        return evaluationOutput;
+                    }
                 })
             ]
         });
