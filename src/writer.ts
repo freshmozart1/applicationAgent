@@ -19,8 +19,7 @@ export class WriterAgent extends Agent<string> {
         super({
             name: 'jobApplicationWriter',
             instructions: promptBuilder('writer', [
-                ['{{PERSONAL_INFO}}', personalInformation],
-                ['{{JOB}}', JSON.stringify(jobVacancy)]
+                ['{{PERSONAL_INFO}}', personalInformation]
             ]),
             model: 'gpt-5-nano',
             outputType: 'text',
@@ -47,7 +46,10 @@ export class WriterAgent extends Agent<string> {
                                 .run(
                                     new EvaluatorAgent(),
                                     `Evaluate the following job application letter:\n\n${letter}\n\nReturn "good" or "bad".`
-                                )
+                                ),
+                            {
+                                retries: 10
+                            }
                         )).finalOutput;
                         if (evaluationOutput !== 'good' && evaluationOutput !== 'bad') throw new InvalidEvaluationOutputError();
                         return evaluationOutput;
