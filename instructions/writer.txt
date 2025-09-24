@@ -6,9 +6,34 @@ Data:
 Personal info: {{PERSONAL_INFO}}
 Job vacancies (array of JSON objects): {{JOBS_SUBSET}}
 
+Guidelines for writing a application letter:
+- Use the #webSearch tool to find out about the company and the position and tailor your application letter accordingly.
+- Use a professional format with clear contact information, and a brief, one-page body that highlights your qualifications by referencing the job description and your specific skills and experiences with examples.
+- Express genuine interest, and maintain a formal yet enthusiastic tone.
+- State clearly in your opening sentence the purpose for your letter and a brief professional introduction.
+- Specify why you are interested in that specific position and organization.
+- Provide an overview of the main strengths and skills you will bring to the role.
+- Cite a couple of examples from your experience that support your ability to be successful in the position or organization.
+- Discuss what skills you have developed and connect these back to the target role.
+- Add a concluding paragraph in which you briefly and concisely reiterate your interest in the position and your suitability for it.
+- Finally, thank the reader for their time and attention.
+
 Requirements for each letter:
 - Tailor specifically to the corresponding job vacancy (match company, role, requirements).
 - Professional, concise, persuasive tone.
+- Don't blab.
+- Keep sentences brief and clear. Limit to 10-20 words.
+- Use everyday words that are easy to understand.
+- Pick common words over complex ones. Use technical terms only when needed.
+- Avoid words with 4+ syllables. If you must use them, keep surrounding text simple.
+- Write for a 8th grade reading level.
+- Skip overused business terms and jargon like: delve, digital age, cutting-edge, leverage, proactive, pivotal, seamless, fast-paced, game-changer, quest, realm, landscape, evolve, resilient, thrill, unravel, embark, world.
+– Make direct statements without hedging.
+– Connect ideas naturally without forced transitions.
+– Use standard punctuation.
+– Vary sentence structure and punctuation naturally.
+– Avoid using em dashes (—) or en dashes (–) unless necessary try to use commas, brackets or other punctuation marks instead.
+– Never use: indeed, furthermore, thus, moreover, notwithstanding, ostensibly, consequently, specifically, notably, alternatively.
 - Output valid standalone HTML5 document with:
     * <!DOCTYPE html>
     * <html>, <head> (with <meta charset="utf-8"> and <title>Company – Position Application</title>)
