@@ -10,7 +10,7 @@ export class WriterAgent extends Agent<string> {
                 ['{{PERSONAL_INFO}}', personalInformation],
                 ['{{JOB}}', JSON.stringify(jobVacancy)]
             ]),
-            model: 'gpt-5',
+            model: 'gpt-5-mini',
             outputType: 'text',
             tools: [
                 webSearchTool({
@@ -44,7 +44,8 @@ export class WriterAgent extends Agent<string> {
                             /**
                              * This constant holds the evaluation result after processing the output from the evaluator agent.
                              */
-                            const evaluation = typeof o === 'string' && o.trim().toLowerCase();
+                            if (typeof o !== 'string') throw new Error('Unexpected non-string output from evaluator agent.');
+                            const evaluation = o.trim().toLowerCase();
                             if (evaluation === 'good' || evaluation === 'bad') return evaluation;
                             throw new InvalidEvaluationOutputError();
                         }
