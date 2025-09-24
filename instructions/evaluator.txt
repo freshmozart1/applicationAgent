@@ -31,12 +31,6 @@ Edge Handling:
 Forbidden:
 - Do NOT copy wording from good examples verbatim (but you may still judge positively if stylistically similar).
 - Do NOT explain your reasoning.
-- Do NOT output anything except a single lowercase word.
 
 Final Output:
-Return EXACTLY:
-good
-OR
-bad
-
-Nothing else. No punctuation. No quotes.
+EXACTLY string "good" OR string "bad".
