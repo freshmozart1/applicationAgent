@@ -39,7 +39,7 @@ Requirements for the application letter:
     * <html>, <head> (with <meta charset="utf-8"> and <title>Company – Position Application</title>)
     * <style> minimal inline CSS
     * <body> sections: Greeting, Opening hook, Value alignment, Motivation, Closing, Signature
-- No placeholders like [Company, GREETING, OPENING HOOK, VALUE ALIGNMENT, MOTIVATION, BELEGE AUS PROJEKTEN, ROLLENFIT, CLOSING, SIGNATURE].
+- No lowercase or uppercase placeholders like [Company, Greeting, Opening Hook, Value Alignment, Motivation, CLosing, Signature].
 - No external resources.
 - Escape internal quotes.
 - No line breaks inside strings (replace with spaces).
@@ -48,7 +48,7 @@ Requirements for the application letter:
 
 Quality Gate (per letter):
 1. Draft letter.
-2. Call #evaluation tool with ONLY that letter.
+2. Call #evaluation tool with the HTML code of the letter.
 3. If #evaluation tool returns "bad", improve and re-evaluate.
 4. Repeat until #evaluation tool returns "good".
 5. Only then output the final letter.
