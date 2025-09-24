@@ -3,13 +3,12 @@ import { promptBuilder } from "./helpers.js";
 import { InvalidEvaluationOutputError } from "./errors.js";
 
 export class WriterAgent extends Agent<string> {
-    constructor(jobVacancies: Job[], personalInformation: string) {
+    constructor(jobVacancy: Job, personalInformation: string) {
         super({
             name: 'jobApplicationWriter',
             instructions: promptBuilder('writer', [
                 ['{{PERSONAL_INFO}}', personalInformation],
-                ['{{JOBS_SUBSET}}', JSON.stringify(jobVacancies)],
-                ['{{JOBS_SUBSET_LENGTH}}', String(jobVacancies.length)]
+                ['{{JOB}}', JSON.stringify(jobVacancy)]
             ]),
             model: 'gpt-5',
             outputType: 'text',

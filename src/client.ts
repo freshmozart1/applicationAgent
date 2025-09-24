@@ -163,28 +163,44 @@ class ApplicationAssistant {
     private static async writeApplications(jobs: Job[] = this.jobs): Promise<string[]> {
         const jl = jobs.length;
         if (jl === 0) return [];
-        return safeCall<string[]>(
-            `writer.run(size=${jl})`,
+        return Promise.all(jobs.map(async job => safeCall<string>(
+            `writer.run(jobId=${job.id})`,
             async () => {
-                const letters = JSON.parse((await this.runner.run<Agent<string>, { job: Job }>(new WriterAgent(jobs, this.personalInformation), 'Write job application letters.')).finalOutput || '');
-                if (Array.isArray(letters) && letters.length === jl && letters.every(l => typeof l === 'string')) return letters;
-                throw new InvalidWriterOutputError();
+                const letter = (await this.runner.run<Agent<string>, { job: Job }>(
+                    new WriterAgent(job, this.personalInformation),
+                    `Write a job application letter for the following job vacancy: ${JSON.stringify(job)}`
+                )).finalOutput;
+                if (letter && typeof letter === 'string') return letter;
+                throw new InvalidFilterOutputError();
             },
             {
                 retries: 5,
-                onRetry: ({ attempt, delayMs, reason }) => console.warn(`[writer] retry ${attempt}/5 in ${delayMs}ms (${reason}) subset=${jl}`),
-                onRequestTooLarge: async () => {
-                    if (jl === 1) throw new SingleJobSubsetTooLargeError();
-                    const mid = Math.floor(jobs.length / 2);
-                    console.warn(`[writer] splitting subset ${jl} into ${mid} + ${jl - mid}`);
-                    const [a, b] = await Promise.all([
-                        this.writeApplications(jobs.slice(0, mid)),
-                        this.writeApplications(jobs.slice(mid))
-                    ]);
-                    return [...a, ...b];
-                }
+                onRetry: ({ attempt, delayMs, reason }) => console.warn(`[writer] retry ${attempt}/5 in ${delayMs}ms (${reason}) jobId=${job.id}`),
+                onRequestTooLarge: () => { throw new SingleJobSubsetTooLargeError(); }
             }
-        );
+        )));
+        // return safeCall<string[]>(
+        //     `writer.run(size=${jl})`,
+        //     async () => {
+        //         const letters = JSON.parse((await this.runner.run<Agent<string>, { job: Job }>(new WriterAgent(jobs, this.personalInformation), 'Write job application letters.')).finalOutput || '');
+        //         if (Array.isArray(letters) && letters.length === jl && letters.every(l => typeof l === 'string')) return letters;
+        //         throw new InvalidWriterOutputError();
+        //     },
+        //     {
+        //         retries: 5,
+        //         onRetry: ({ attempt, delayMs, reason }) => console.warn(`[writer] retry ${attempt}/5 in ${delayMs}ms (${reason}) subset=${jl}`),
+        //         onRequestTooLarge: async () => {
+        //             if (jl === 1) throw new SingleJobSubsetTooLargeError();
+        //             const mid = Math.floor(jobs.length / 2);
+        //             console.warn(`[writer] splitting subset ${jl} into ${mid} + ${jl - mid}`);
+        //             const [a, b] = await Promise.all([
+        //                 this.writeApplications(jobs.slice(0, mid)),
+        //                 this.writeApplications(jobs.slice(mid))
+        //             ]);
+        //             return [...a, ...b];
+        //         }
+        //     }
+        // );
     }
 
     /**
