@@ -91,9 +91,8 @@ export async function safeCall<T>(context: string, fn: () => Promise<T>, opts: R
         retries = 5,
         baseDelayMs = 600,
         maxDelayMs = 8000,
-        jitterRatio = 0.2,
+        jitterRatio = 0.4,
         retryOn = ({ status }) => DEFAULT_RETRYABLE_STATUS(status),
-        onRetry,
         onRequestTooLarge
     } = opts;
     let attempt = 0;
@@ -113,10 +112,10 @@ export async function safeCall<T>(context: string, fn: () => Promise<T>, opts: R
             }
             if (message && /request too large/i.test(message)) {
                 if (onRequestTooLarge) {
-                    console.warn(`[safeCall] ${context} request too large; invoking split handler.`);
+                    console.warn(`[safeCall] ${context} request too large; invoking onRequestTooLarge handler.`);
                     return await onRequestTooLarge();
                 }
-                console.error(`[safeCall] ${context} request too large but no split handler provided.`);
+                console.error(`[safeCall] ${context} request too large but no onRequestTooLarge handler provided.`);
                 throw err;
             }
             if (!(attempt < retries && retryOn({ status, error: err, attempt }))) {
@@ -131,10 +130,9 @@ export async function safeCall<T>(context: string, fn: () => Promise<T>, opts: R
                 delayMs = Math.min(maxDelayMs, baseDelayMs * (2 ** attempt));
             }
             const jitterRange = delayMs * jitterRatio;
-            delayMs = Math.max(0, Math.round(delayMs + (Math.random() * jitterRange * 2) - jitterRange));
-            onRetry?.({ attempt: attempt + 1, delayMs, reason });
+            delayMs += Math.max(0, Math.round((Math.random() * jitterRange * 2) - jitterRange));
             console.warn(`[safeCall] ${context} failed (attempt ${attempt + 1} of ${retries}, ${reason}), retrying in ${delayMs}ms:`, { status, type, message });
-            await new Promise(res => setTimeout(res, delayMs));
+            await sleep(delayMs);
             attempt++;
         }
     }
