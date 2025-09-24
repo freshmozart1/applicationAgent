@@ -138,7 +138,6 @@ class ApplicationAssistant {
                 },
                 {
                     retries: 20,
-                    onRetry: ({ attempt, delayMs, reason }) => console.warn(`[filter] retry ${attempt}/20 in ${delayMs}ms (${reason}) jobId=${job.id}`),
                     onRequestTooLarge: () => { throw new Error('Job object too large for filter agent'); }
                 }
             )))
@@ -163,7 +162,7 @@ class ApplicationAssistant {
     private static async writeApplications(jobs: Job[] = this.jobs): Promise<string[]> {
         const jl = jobs.length;
         if (jl === 0) return [];
-        return Promise.all(jobs.map(async job => safeCall<string>(
+        return Promise.allSettled(jobs.map(async job => safeCall<string>(
             `writer.run(jobId=${job.id})`,
             async () => {
                 const letter = (await this.runner.run<Agent<string>, { job: Job }>(
@@ -175,32 +174,23 @@ class ApplicationAssistant {
             },
             {
                 retries: 5,
-                onRetry: ({ attempt, delayMs, reason }) => console.warn(`[writer] retry ${attempt}/5 in ${delayMs}ms (${reason}) jobId=${job.id}`),
                 onRequestTooLarge: () => { throw new SingleJobSubsetTooLargeError(); }
             }
-        )));
-        // return safeCall<string[]>(
-        //     `writer.run(size=${jl})`,
-        //     async () => {
-        //         const letters = JSON.parse((await this.runner.run<Agent<string>, { job: Job }>(new WriterAgent(jobs, this.personalInformation), 'Write job application letters.')).finalOutput || '');
-        //         if (Array.isArray(letters) && letters.length === jl && letters.every(l => typeof l === 'string')) return letters;
-        //         throw new InvalidWriterOutputError();
-        //     },
-        //     {
-        //         retries: 5,
-        //         onRetry: ({ attempt, delayMs, reason }) => console.warn(`[writer] retry ${attempt}/5 in ${delayMs}ms (${reason}) subset=${jl}`),
-        //         onRequestTooLarge: async () => {
-        //             if (jl === 1) throw new SingleJobSubsetTooLargeError();
-        //             const mid = Math.floor(jobs.length / 2);
-        //             console.warn(`[writer] splitting subset ${jl} into ${mid} + ${jl - mid}`);
-        //             const [a, b] = await Promise.all([
-        //                 this.writeApplications(jobs.slice(0, mid)),
-        //                 this.writeApplications(jobs.slice(mid))
-        //             ]);
-        //             return [...a, ...b];
-        //         }
-        //     }
-        // );
+        ))).then(async results => {
+            const letters: string[] = [];
+            let failedCounter = 0;
+            for (let i = 0; i < results.length; i++) {
+                const result = results[i];
+                if (result.status === 'fulfilled') {
+                    letters.push(result.value);
+                } else {
+                    failedCounter++;
+                    console.error(`Failed to write application for jobId=${jobs[i].id}:`, String(result.reason).includes('RateLimitError') ? 'Rate limit exceeded' : result.reason);
+                }
+            }
+            if (failedCounter > 0) console.warn(`Failed to write ${failedCounter}/${jl} applications.`);
+            return letters;
+        });
     }
 
     /**
