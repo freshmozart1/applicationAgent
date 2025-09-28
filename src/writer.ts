@@ -1,7 +1,5 @@
 import { Agent, webSearchTool, tool, Runner } from "@openai/agents";
 import { promptBuilder, safeCall } from "./helpers.js";
-import { InvalidEvaluationOutputError } from "./errors.js";
-import { EvaluationToolSchema } from "./schemas.js";
 
 class EvaluatorAgent extends Agent<string> {
     constructor() {
@@ -15,14 +13,21 @@ class EvaluatorAgent extends Agent<string> {
 }
 
 export class WriterAgent extends Agent<string> {
-    constructor(jobVacancy: Job, personalInformation: string) {
+    constructor(personalInformation: string, exampleApplicationLetters: string[] = []) {
         super({
             name: 'jobApplicationWriter',
             instructions: promptBuilder('writer', [
-                ['{{PERSONAL_INFO}}', personalInformation]
+                ['{{PERSONAL_INFO}}', personalInformation],
+                ['{{EXAMPLES}}', exampleApplicationLetters.length ? exampleApplicationLetters.reduce((prev, curr, idx) => prev + `Example ${idx + 1}:\n${curr}\n\n`, '') : 'No examples provided.'],
             ]),
-            model: 'gpt-5-nano',
+            model: 'gpt-5-mini',
             outputType: 'text',
+            modelSettings: {
+                reasoning: {
+                    effort: 'high',
+                    summary: 'detailed'
+                }
+            },
             tools: [
                 webSearchTool({
                     name: '#webSearch',
@@ -33,26 +38,6 @@ export class WriterAgent extends Agent<string> {
                         country: 'DE',
                         timezone: 'Europe/Berlin',
                         type: 'approximate'
-                    }
-                }),
-                tool({
-                    name: '#evaluation',
-                    description: 'Evaluate the quality of a job application letter.',
-                    parameters: EvaluationToolSchema,
-                    async execute({ letter }: { letter: string }) {
-                        const evaluationOutput = (await safeCall(
-                            `writer.evaluate`,
-                            () => (new Runner({ workflowName: 'applicationAssistant' }))
-                                .run(
-                                    new EvaluatorAgent(),
-                                    `Evaluate the following job application letter:\n\n${letter}\n\nReturn "good" or "bad".`
-                                ),
-                            {
-                                retries: 10
-                            }
-                        )).finalOutput;
-                        if (evaluationOutput !== 'good' && evaluationOutput !== 'bad') throw new InvalidEvaluationOutputError();
-                        return evaluationOutput;
                     }
                 })
             ]
