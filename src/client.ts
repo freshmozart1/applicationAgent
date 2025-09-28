@@ -41,6 +41,7 @@ class ApplicationAssistant {
     private static scrapeUrls = fs.readFileSync(path.join(this.dataDir, 'scrapeUrls.txt'), 'utf8').split('\n').map(l => l.trim());
 
     private static personalInformationPath = path.join(this.dataDir, 'personalInformation.json');
+
     /**
      * This string contains personal information and inspiration for writing application letters.
      * 
@@ -62,6 +63,12 @@ class ApplicationAssistant {
      * This directory is where the generated application letters will be saved. It also contains good and bad application letters for reference.
      */
     private static applicationsDir = path.join(this.dataDir, 'applications');
+
+    /**
+     * This directory contains example application letters that will be used for inspiration by the writer agent.
+     */
+    private static examplesDir = path.join(this.applicationsDir, 'examples');
+
     /**
      * This array holds the filtered job listings that are deemed suitable for application.
      */
@@ -166,7 +173,12 @@ class ApplicationAssistant {
             `writer.run(jobId=${job.id})`,
             async () => {
                 const letter = (await this.runner.run<Agent<string>, { job: Job }>(
-                    new WriterAgent(job, this.personalInformation),
+                    new WriterAgent(
+                        this.personalInformation,
+                        fs.readdirSync(this.examplesDir)
+                            .filter(f => f.endsWith('.txt'))
+                            .map(f => fs.readFileSync(path.join(this.examplesDir, f), 'utf8'))
+                    ),
                     `Write a job application letter for the following job vacancy: ${JSON.stringify(job)}`
                 )).finalOutput;
                 if (letter && typeof letter === 'string') return letter;
@@ -209,6 +221,7 @@ class ApplicationAssistant {
             [path.join(CWD, 'data'), 'Data directory does not exist'],
             [secretsDir, 'Secrets directory does not exist'],
             [this.applicationsDir, `Applications directory does not exist: ${this.applicationsDir}`],
+            [this.examplesDir, `Examples directory does not exist: ${this.examplesDir}`],
             [this.personalInformationPath, `Personal information file does not exist: ${this.personalInformationPath}`],
             [path.join(this.dataDir, 'scrapeUrls.txt'), `Scrape URLs file does not exist: ${path.join(this.dataDir, 'scrapeUrls.txt')}`]
         ];
