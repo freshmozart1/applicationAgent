@@ -222,6 +222,98 @@
         ],
         "avoid_industries": []
     },
+    "motivations": [
+        {
+            "topic": "Continuous Learning",
+            "description": "I am passionate about learning new technologies and improving my skills. I enjoy working in environments that encourage continuous learning and professional development.",
+            "reason_lite": "Driven by continuous learning and skill growth."
+        },
+        {
+            "topic": "Impactful Work",
+            "description": "I am motivated by the opportunity to work on projects that have a meaningful impact. I want to contribute to products and services that make a difference in people's lives.",
+            "reason_lite": "Motivated by creating products with real impact."
+        },
+        {
+            "topic": "Challenges",
+            "description": "I enjoy tackling complex problems and finding innovative solutions.",
+            "reason_lite": "Enjoy solving complex problems with creative solutions."
+        },
+        {
+            "topic": "AI Agents",
+            "reason": "I am currently developing my own AI agent because I am fascinated by the OpenAI Agents library and want to explore the potential of this technology.",
+            "reason_lite": "Fascinated by AI agents and exploring their potential."
+        },
+        {
+            "topic": "Internet of Things",
+            "reason": "I use smart home devices myself that make my daily life easier, which motivates me to contribute to IoT solutions professionally.",
+            "reason_lite": "Interested in IoT through personal smart home use."
+        },
+        {
+            "topic": "FinTech",
+            "reason": "I have traded stocks and warrants for a long time and want to bring my experience and interest in financial topics into innovative FinTech projects.",
+            "reason_lite": "Drawn to FinTech through personal trading experience."
+        },
+        {
+            "topic": "Artificial Intelligence",
+            "reason": "AI is still a young technology whose possibilities are hardly understood. I am excited to explore new application areas.",
+            "reason_lite": "Motivated to explore emerging applications of AI."
+        },
+        {
+            "topic": "JavaScript",
+            "reason": "I taught myself JavaScript because it is universally applicable on both the server and the client side.",
+            "reason_lite": "Self-taught JavaScript for its universal use."
+        },
+        {
+            "topic": "Future Development",
+            "reason": "I want to further develop in the field of AI agent development, as now is the right time to explore ways of integrating AI into everyday life.",
+            "reason_lite": "Focused on advancing in AI agent development."
+        },
+        {
+            "topic": "Openness",
+            "reason": "Openness allows problems to be addressed early and solved collaboratively.",
+            "reason_lite": "Value openness for early and collaborative problem-solving."
+        },
+        {
+            "topic": "Sustainability",
+            "reason": "It is important to me that society becomes more sustainable through innovation and inclusion in order to preserve the planet in the long term.",
+            "reason_lite": "Committed to sustainability through innovation and inclusion."
+        },
+        {
+            "topic": "End-User Focus",
+            "reason": "I enjoy building software for end-users, especially those who are less technically experienced, because it feels rewarding to help people directly.",
+            "reason_lite": "Motivated by creating software that helps everyday users."
+        },
+        {
+            "topic": "Work Environment",
+            "reason": "I prefer working from home or in calm settings with a few familiar colleagues. I especially value start-ups, where building friendships at work is easier, unlike larger corporations where relationships often feel more distant.",
+            "reason_lite": "Prefer calm, friendly work environments and close-knit teams."
+        },
+        {
+            "topic": "Exploring New Technologies",
+            "reason": "I constantly enjoy trying out new technologies, as experimenting with tools and frameworks keeps me engaged and inspired.",
+            "reason_lite": "Driven by exploring and experimenting with new technologies."
+        },
+        {
+            "topic": "Inspiration",
+            "reason": "Adobe Dreamweaver CS3 inspired me to become a developer. It shaped my childhood by introducing me to HTML, CSS, and JavaScript in a playful and visual way.",
+            "reason_lite": "Inspired to code through early experiences with Dreamweaver CS3."
+        },
+        {
+            "topic": "Community Recognition",
+            "reason": "I sometimes share my projects on Reddit and feel highly motivated whenever I receive recognition and feedback from other developers.",
+            "reason_lite": "Energized by recognition and feedback from developer communities."
+        },
+        {
+            "topic": "Future Technologies",
+            "reason": "I believe AI, brain-computer interfaces, AR, and VR will converge in the future, and I want to contribute to that development. Green Tech also excites me for its role in improving efficiency across industries. In addition, the mobility and logistics sector will transform with autonomous vehicles and drones, and I would like to participate, having worked for a mobility company that tested autonomous buses.",
+            "reason_lite": "Excited to shape the future of AI, AR/VR, Green Tech, and mobility."
+        },
+        {
+            "topic": "Diversity and Values",
+            "reason": "Cultural diversity in the workplace is very important to me. I also value left-leaning political principles, as I am active in a labor union. I strongly oppose racism and discrimination of any kind.",
+            "reason_lite": "Value diversity, inclusion, and progressive workplace culture."
+        }
+    ],
     "scoring_settings": {
         "recency_decay": {
             "half_life_months": 18
