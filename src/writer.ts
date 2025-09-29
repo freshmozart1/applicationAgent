@@ -23,6 +23,7 @@ export class WriterAgent extends Agent<string> {
             model: 'gpt-5-mini',
             outputType: 'text',
             modelSettings: {
+                maxTokens: 15000,
                 reasoning: {
                     effort: 'high',
                     summary: 'detailed'
@@ -44,17 +45,20 @@ export class WriterAgent extends Agent<string> {
                             /^https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&\/=]*)$/.test(companyDomain) ? (new URL(companyDomain)).hostname : companyDomain,
                             'linkedin.com',
                             'xing.com',
-                            'crunchbase.com',
                             'glassdoor.com',
                             'kununu.com',
                             'indeed.com',
-                            'google.com',
                             'wikipedia.org',
                             'facebook.com',
-                            'x.com',
                             'reddit.com',
                             'instagram.com',
-                            'youtube.com'
+                            'medium.com',
+                            'get-in-it.de',
+                            'stepstone.de',
+                            'bewerbung.net',
+                            'karriere.at',
+                            'karrierebibel.de',
+                            'studyflix.de',
                         ]
                     }
                 })
