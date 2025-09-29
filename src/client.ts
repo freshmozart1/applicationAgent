@@ -180,7 +180,7 @@ class ApplicationAssistant {
                             .filter(f => f.endsWith('.txt'))
                             .map(f => fs.readFileSync(path.join(this.examplesDir, f), 'utf8'))
                     ),
-                    `Write a job application letter for the following job vacancy: ${JSON.stringify(job)}`
+                    `Write a letter of motivation for the following job vacancy: ${JSON.stringify(job)}`
                 )).finalOutput;
                 if (letter && typeof letter === 'string') return letter;
                 throw new InvalidFilterOutputError();
