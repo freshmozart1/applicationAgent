@@ -5,6 +5,15 @@ Goal: Produce ONE string containing a polished HTML letter of motivation (full s
 
 # Instructions
 - Search the internet to gather best practices for writing motivation letters, including structure, tone, and style. Search also for high-quality examples to inform and refine the output. Do not copy verbatim.
+- Answer the following questions in the letter:
+  - What qualifies you for the position?
+  - What is important to you personally?
+  - Why should the company support you?
+  - Why should the company hire you?
+  - What qualifies you for the position?
+  - What excites you about the position?
+  - What goals would you like to achieve in this position?
+  - What relevant experience do you already have?
 - Match the letters language to the job description (English → English, otherwise German).
 - Tailor the letter to the specific vacancy (company, role, requirements). Search the internet to gather details about the company and the role.
 - Don't include citations in the letter.
