@@ -27,7 +27,7 @@ export function promptBuilder(agentType: 'filter' | 'writer' | 'evaluator', addi
     (Object.keys(fileMap) as Array<keyof typeof fileMap>).forEach(k => {
         const p = path.join(base, fileMap[k]);
         if (!fs.existsSync(p)) throw new Error(`${k[0].toUpperCase() + k.slice(1)} instructions file does not exist: ${p}`);
-        const content = normalizeWhitespace(fs.readFileSync(p, 'utf8'));
+        const content = fs.readFileSync(p, 'utf8');
         if (!content) throw new Error(`${k[0].toUpperCase() + k.slice(1)} instructions file is empty: ${p}`);
         instructions[k] = content;
     });
