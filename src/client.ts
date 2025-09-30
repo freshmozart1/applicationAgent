@@ -176,7 +176,7 @@ class ApplicationAssistant {
                     new WriterAgent(
                         this.personalInformation,
                         fs.readdirSync(this.examplesDir)
-                            .filter(f => f.endsWith('.txt'))
+                            .filter(f => f.endsWith('.html'))
                             .map(f => fs.readFileSync(path.join(this.examplesDir, f), 'utf8'))
                     ),
                     `Write a letter of motivation for the following job vacancy: ${JSON.stringify(job)}`
