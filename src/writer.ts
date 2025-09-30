@@ -13,7 +13,7 @@ class EvaluatorAgent extends Agent<string> {
 }
 
 export class WriterAgent extends Agent<string> {
-    constructor(personalInformation: string, companyDomain: string, exampleApplicationLetters: string[] = []) {
+    constructor(personalInformation: string, exampleApplicationLetters: string[] = []) {
         super({
             name: 'jobApplicationWriter',
             instructions: promptBuilder('writer', [
@@ -39,27 +39,6 @@ export class WriterAgent extends Agent<string> {
                         country: 'DE',
                         timezone: 'Europe/Berlin',
                         type: 'approximate'
-                    },
-                    filters: {
-                        allowedDomains: [
-                            /^https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&\/=]*)$/.test(companyDomain) ? (new URL(companyDomain)).hostname : companyDomain,
-                            'linkedin.com',
-                            'xing.com',
-                            'glassdoor.com',
-                            'kununu.com',
-                            'indeed.com',
-                            'wikipedia.org',
-                            'facebook.com',
-                            'reddit.com',
-                            'instagram.com',
-                            'medium.com',
-                            'get-in-it.de',
-                            'stepstone.de',
-                            'bewerbung.net',
-                            'karriere.at',
-                            'karrierebibel.de',
-                            'studyflix.de',
-                        ]
                     }
                 })
             ]

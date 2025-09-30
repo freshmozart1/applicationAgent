@@ -175,7 +175,6 @@ class ApplicationAssistant {
                 const letter = (await this.runner.run<Agent<string>, { job: Job }>(
                     new WriterAgent(
                         this.personalInformation,
-                        job.companyWebsite ? (new URL(job.companyWebsite)).hostname : '',
                         fs.readdirSync(this.examplesDir)
                             .filter(f => f.endsWith('.txt'))
                             .map(f => fs.readFileSync(path.join(this.examplesDir, f), 'utf8'))
