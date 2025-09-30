@@ -1,176 +1,226 @@
 # applicationAgent
 
-AI agent workflow that:
-1. Scrapes LinkedIn job vacancies via Apify.
-2. Filters jobs with an OpenAI evaluation agent.
-3. Generates tailored HTML application letters (in German or English) per selected job.
-4. Iteratively self‑critiques letters using an evaluator tool until quality is “good”.
-5. Saves the final letters to `data/applications`.
+Automated multi‑agent pipeline for sourcing LinkedIn job vacancies, filtering for fit, and producing high‑quality, self‑critiqued HTML application letters.
 
-## Features
+---
 
-- Strong schema validation with Zod (`Job` schema in [`src/client.ts`](src/client.ts)).
-- Prompt assembly with dynamic examples using [`promptBuilder`](src/instructions/promptBuilder.ts).
-- Multi‑agent workflow orchestrated by the `ApplicationAssistant` class in [`src/client.ts`](src/client.ts).
-- Automatic retry + evaluation loop for generated letters.
-- Local quality examples sourced from:
-  - `data/applications/goodResponses`
-  - `data/applications/badResponses`
-- Evals pipeline for job fit prototype in [`src/evaluate.ts`](src/evaluate.ts).
-- Custom errors: [`ParsingAfterScrapeError`](src/errors.ts), [`InvalidEvaluationOutputError`](src/errors.ts), [`InvalidWriterOutputError`](src/errors.ts).
+## Why This Exists
 
-## Core Classes / Symbols
+Manual tailoring of job applications is slow, repetitive, and noisy. applicationAgent automates the boring 90% while keeping humans in the loop for review. It combines structured scraping, schema‑validated parsing, controlled prompt assembly, and iterative critique for higher quality drafts with less hallucination and drift.
 
-- `ApplicationAssistant` (main workflow) in [`src/client.ts`](src/client.ts)
-- `promptBuilder` in [`src/instructions/promptBuilder.ts`](src/instructions/promptBuilder.ts)
-- Errors: [`ParsingAfterScrapeError`](src/errors.ts), [`InvalidEvaluationOutputError`](src/errors.ts), [`InvalidWriterOutputError`](src/errors.ts)
+## High‑Level Overview
 
-## Directory Structure
+1. Scrape LinkedIn job pages/searches via Apify (caches by last scrape timestamp)
+2. Parse + Zod‑validate raw items into strongly typed `Job` objects
+3. Filter jobs using an LLM “fit” discriminator prompt
+4. For accepted jobs, assemble a writer prompt with curated examples
+5. Generate HTML letters (German or English depending on job language cues)
+6. (Planned / currently disabled in live run) Evaluate drafts against GOOD/BAD exemplars for iterative refinement
+7. Persist final HTML to `data/applications/<jobId>.html`
+
+
+## Architecture Snapshot
+
+| Layer | Responsibility | Key Files |
+|-------|----------------|-----------|
+| Scrape | Fetch LinkedIn jobs through Apify actor | `src/client.ts` (scrape orchestration) |
+| Parse & Validate | Convert raw JSON to `Job` schema | `src/client.ts`, `src/schemas.ts` |
+| Filter | LLM decides keep / drop | `src/filter.ts`, `instructions/filter.txt` |
+| Prompt Assembly | Inject examples + dynamic vars | `src/instructions/promptBuilder.ts` |
+| Writer | Produce HTML letter(s) | `src/writer.ts` |
+| Evaluator | Judge quality (`good|bad`) | `src/evaluate.ts`, `instructions/evaluator.txt` |
+| Persistence | Save final artifacts | `data/applications/*.html` |
+| Errors | Domain‑specific failures | `src/errors.ts` |
+
+## Data Flow (Simplified)
+
+```text
+Apify -> raw listings -> parse(Zod) -> Job[] -> filter LLM -> accepted subset
+  -> promptBuilder (examples + personal info + subset) -> writer LLM -> draft HTML[]
+    -> evaluator loop (good|bad) -> final HTML[] -> filesystem persistence
+```
+
+## Directory Map
 
 ```
 data/
-  resumeInspiration.txt
-  scrapeUrls.txt
+  scrapeUrls.txt            # Input: one LinkedIn search or job URL per line
+  resumeInspiration.txt     # Personal profile text (collapsed to single line)
   applications/
-    goodResponses/   # curated GOOD html examples
-    badResponses/    # curated BAD html examples
-    *.html           # generated outputs
+    goodResponses/          # Curated GOOD HTML examples
+    badResponses/           # Curated BAD HTML examples
+    <jobId>.html            # Generated application letters
 instructions/
   filter.txt
   writer.txt
   evaluator.txt
 src/
-  client.ts
-  evaluate.ts
-  errors.ts
+  client.ts                 # ApplicationAssistant orchestrator
+  writer.ts                 # Writer agent logic
+  filter.ts                 # Filtering agent logic
+  evaluate.ts               # Eval harness (job fit prototype)
+  errors.ts                 # Custom error classes
+  schemas.ts                # Zod schemas
+  types.d.ts
   instructions/promptBuilder.ts
-build/              # compiled JS (tsc output)
+build/                      # Compiled JS output (tsc)
 secrets/
-  apify_token
-jobVacancyTestData.jsonl
+  apify_token               # Apify API token (file contents only)
+jobVacancyTestData.jsonl    # Test dataset for eval harness (if present)
 ```
 
-## Prerequisites
+## Environment & Configuration
 
+Required environment + files:
+
+| Purpose | Variable / Path | Notes |
+|---------|-----------------|-------|
+| OpenAI auth | `OPENAI_API_KEY` | Export in shell (no quotes) |
+| Apify auth | `secrets/apify_token` | File containing only the token |
+| Input sources | `data/scrapeUrls.txt` | One URL per line |
+| Personal info | `data/personalInformation.json` | Personal information |
+| Examples | `data/applications/examples` | Contains text files with examples for letters written by the user |
+
+Assumptions:
 - Node 18+
-- OpenAI API key in environment: `OPENAI_API_KEY`
-- Apify token stored in `secrets/apify_token`
-- Populate:
-  - `data/scrapeUrls.txt` (one LinkedIn job search / job URL per line)
-  - `data/resumeInspiration.txt` (personal profile; long lines are ok—newlines are stripped)
+- Internet access for scraping & OpenAI
 
-## Install
+## Install & Bootstrap
 
 ```sh
 npm install
 ```
 
-## Run (full pipeline)
+Minimal one‑shot setup:
 
-Build + run:
+```sh
+export OPENAI_API_KEY=sk-...               # or add to your shell profile
+echo "YOUR_APIFY_TOKEN" > secrets/apify_token
+echo "https://www.linkedin.com/jobs/search/?currentJobId=123" > data/scrapeUrls.txt
+echo "Kurzprofil, Skills, Stack, Motivation ..." > data/resumeInspiration.txt
+mkdir -p data/applications/{goodResponses,badResponses}
+npm install
+npm run start
+```
+
+## Scripts
+
+Declared in `package.json`:
+
+```jsonc
+"start": "rm -rf build && tsc && chmod 755 build/*.js && node build/client.js",
+"eval": "rm -rf build && tsc && chmod 755 build/*.js && node build/evaluate.js"
+```
+
+## Running the Full Pipeline
 
 ```sh
 npm run start
 ```
 
-What happens:
-- Validates required paths.
-- Scrapes or reuses a recent scrape (rescrapes if last scrape older than 24h).
-- Parses & validates jobs (throws [`ParsingAfterScrapeError`](src/errors.ts) if schema mismatch).
-- Filters jobs using the “filter” prompt (see [`instructions/filter.txt`](instructions/filter.txt)).
-- Generates letters; each letter is evaluated via the evaluator tool until “good” or throws [`InvalidWriterOutputError`](src/errors.ts) if final output is malformed.
-- Saves each letter as `<jobId>.html` in `data/applications`.
+What it does:
+1. Cleans & recompiles TypeScript
+2. Loads / validates required input files
+3. Scrapes (or reuses fresh cache) via Apify
+4. Parses -> Zod validates -> `Job[]`
+5. Filters jobs (LLM) using `instructions/filter.txt`
+6. Builds writer prompt (GOOD/BAD examples + personal info)
+7. Generates draft HTML letter(s)
+8. Evaluates each via evaluator prompt until `good` or retry cap
+9. Writes final HTML to `data/applications/`
 
-## Evals (job fit prototype)
-
-Runs the evaluation harness in [`src/evaluate.ts`](src/evaluate.ts):
+## Evaluation Harness (Prototype)
 
 ```sh
 npm run eval
 ```
 
-It:
-- Uploads `jobVacancyTestData.jsonl`
-- (Re)creates an eval named “Job Vacancy Evaluation”
-- Compares model responses (`true` / `false`) against ground truth in the JSONL.
+Performs:
+- Upload / register `jobVacancyTestData.jsonl`
+- (Re)create eval: “Job Vacancy Evaluation”
+- Compare model boolean outputs vs ground truth
 
-## Prompts & Placeholder Expansion
+Planned extensions: precision/recall & confusion matrix summarization.
 
-`promptBuilder`:
-- Loads base instruction files from `instructions/`
-- Injects:
-  - `{{GOOD_APPLICATIONS}}` from `goodResponses`
-  - `{{BAD_APPLICATIONS}}` from `badResponses`
-  - OpenAI recommended prefix: `{{RECOMMENDED_PROMPT_PREFIX}}`
-  - Extra placeholders (e.g. `{{PERSONAL_INFO}}`, `{{JOBS_SUBSET}}`) for the writer
+## Prompt Assembly & Placeholders
 
-Validation rules (see [`promptBuilder`](src/instructions/promptBuilder.ts)):
-- Additional placeholders must match `{{UPPER_CASE}}` style
-- No collisions with reserved placeholders
-- Values must be non‑empty (trimmed)
+`promptBuilder` merges static instruction templates with dynamic tokens:
 
-## Output Quality Loop
+| Placeholder | Source | Description |
+|-------------|--------|-------------|
+| `{{GOOD_APPLICATIONS}}` | local FS | Concatenated GOOD examples |
+| `{{BAD_APPLICATIONS}}` | local FS | Concatenated BAD examples |
+| `{{RECOMMENDED_PROMPT_PREFIX}}` | model guidance | Safety / style prelude |
+| `{{PERSONAL_INFO}}` | `resumeInspiration.txt` | Personal profile text |
+| `{{JOBS_SUBSET}}` | filtered jobs | JSON snippet of target jobs |
 
-Writer agent (see `writeApplications()` in [`src/client.ts`](src/client.ts)):
-1. Draft letter(s)
-2. Calls evaluator tool (`#evaluation`)
-3. If response not exactly `good` / `bad`, throws [`InvalidEvaluationOutputError`](src/errors.ts)
-4. On `bad`, rewrites; repeats (retry capped)
-5. Returns a JSON array of final HTML strings (validated)
+Rules:
+- Extra placeholders must be UPPER_SNAKE wrapped in `{{ }}`
+- No collision with reserved tokens
+- Empty values rejected (trim check)
 
-## Error Handling
+## Quality Loop Logic
 
-- [`ParsingAfterScrapeError`](src/errors.ts): Zod parse failure after scrape
-- [`InvalidEvaluationOutputError`](src/errors.ts): Evaluator returned something other than `good|bad`
-- [`InvalidWriterOutputError`](src/errors.ts): Writer final output not valid JSON array / length mismatch
+> NOTE: The evaluator comparison loop (GOOD/BAD exemplar based) is presently **disabled** in the active agent execution due to instability in consistent `good|bad` judgments. The code and instructions remain in the repository and are intended to be re‑enabled after improvements (see Roadmap). The generated letters currently represent first‑pass drafts without automatic iterative refinement.
 
-## Customization
+Pseudo:
 
-- Tune filtering logic: adjust filter instructions in [`instructions/filter.txt`](instructions/filter.txt)
-- Improve examples: curate HTML samples in `goodResponses` / `badResponses`
-- Adjust max retries (constant inside `writeApplications` in [`src/client.ts`](src/client.ts))
-
-## Environment & Module Format
-
-- TypeScript compiled with `module: Node16` (ESM) per [`tsconfig.json`](tsconfig.json)
-- Package declares `"type": "module"` in [`package.json`](package.json)
-
-## Scripts (from [`package.json`](package.json))
-
-```json
-"start": "rm -rf build && tsc && chmod 755 build/*.js && node build/client.js",
-"eval": "rm -rf build && tsc && chmod 755 build/*.js && node build/evaluate.js"
+```ts
+while (retries < MAX && status !== 'good') {
+  draft = write()
+  verdict = evaluate(draft) // must be 'good' | 'bad'
+  if (verdict === 'bad') refine context & retry
+}
+if (status !== 'good') throw InvalidWriterOutputError
 ```
 
-## Minimal Setup Checklist
+## Error Reference
 
-```sh
-export OPENAI_API_KEY=sk-...
-echo "YOUR_APIFY_TOKEN" > secrets/apify_token
-echo "https://www.linkedin.com/jobs/search/?currentJobId=..." > data/scrapeUrls.txt
-echo "Kurzprofil, Skills, Stack, Motivation ..." > data/resumeInspiration.txt
-mkdir -p data/applications/goodResponses data/applications/badResponses
-npm install
-npm run start
-```
+| Error | Thrown When | File |
+|-------|-------------|------|
+| `ParsingAfterScrapeError` | Zod parse failure after scraping | `src/errors.ts` |
+| `InvalidEvaluationOutputError` | Evaluator not `good|bad` | `src/errors.ts` |
+| `InvalidWriterOutputError` | Final writer output invalid shape | `src/errors.ts` |
 
-## Generated Docs
+## Extending / Customizing
 
-Static TypeDoc output in [`docs/`](docs/index.html).
+- Improve filtering strictness: edit `instructions/filter.txt`
+- Add richer evaluation rubric: refine `instructions/evaluator.txt`
+- Curate more nuanced GOOD/BAD samples for better grounding
+- Adjust retry caps inside writer loop (`writeApplications` in `src/client.ts`)
+- Introduce language preference flag (planned)
 
-## License
+## Development Notes
 
-UNLICENSED (see [`package.json`](package.json)).
+- TypeScript targets Node module resolution; ESM build; output in `build/`
+- Keep runtime imports extension‑less (ESM ok)
+- Consider adding Vitest/Jest for unit tests (see Roadmap)
 
-## Disclaimer
+## Troubleshooting
 
-Use responsibly. Generated letters should be reviewed before sending.
+| Symptom | Likely Cause | Fix |
+|---------|--------------|-----|
+| No letters generated | Filter rejected all | Inspect `filter.txt`, add broader criteria |
+| Error: parse failure | Schema drift in scrape output | Update `schemas.ts` or Apify actor params |
+| Evaluator never returns `good` | Over‑strict rubric or weak examples | Add GOOD examples / relax evaluator wording |
+| Empty placeholders | Missing input files | Recreate `resumeInspiration.txt` / examples dirs |
 
-## TODO Ideas
+## Roadmap (Short List)
 
-- Persist scrape cache metadata
-- Add unit tests
-- Expand eval metrics (precision / recall summary)
-- Configurable language preference
+- [ ] Configurable preferred application language
+- [ ] CLI flags (e.g. `--limit`, `--language`)
+ - [ ] Re‑enable stable evaluator refinement loop (GOOD/BAD exemplar comparison)
+
+## License & Disclaimer
+
+UNLICENSED – see `package.json`.
+
+Outputs are machine‑generated drafts. Always review before sending to employers.
 
 ---
+
+Contributions (issues / PRs) welcome for documentation, tests, and evaluation metrics.
+
+---
+
+Made with intent to reduce repetitive cognitive load while maintaining authenticity.
