@@ -32,10 +32,10 @@ You are a binary job-filtering engine. Compare a single job vacancy object again
   - Work mode match: +0.5 if remote/hybrid/onsite matches any PROFILE_JSON.preferences.work_mode[*].mode
   - Company size (if present): +0.25 if JOB_JSON.companySize matches any company size in PROFILE_JSON.preferences.company_size
   - Primary skills: For each PROFILE_JSON.skills[*] where primary=true:
-    - +0.8 if the skill name or common alias is found in JOB_TEXT
+    - +0.8 if the skill name or one of the skills aliases is found in JOB_TEXT
     - Cap contribution of primary skills at +1.6 total.
   - Secondary skills: For each PROFILE_JSON.skills[*] where primary=false:
-    - +0.2 if the skill name or common alias is found in JOB_TEXT
+    - +0.2 if the skill name or one of the skills aliases is found in JOB_TEXT
 	- Cap contribution of secondary skills at +0.6 total.
   - Languages spoken: +0.2 if job requires a language listed in PROFILE_JSON.languages_spoken at B2/C1/C2
 - After applying hard reject and eligibility pass rules and computing the score output "true" if no hard rejects occurred and score ≥ 3.0. Otherwise output "false".
