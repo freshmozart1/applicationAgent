@@ -41,49 +41,23 @@
             "amount": 35000
         },
         "locations_allowed": [
-            "Hamburg, Germany"
-        ],
-        "company_blacklist": [],
-        "industries_disallowed": []
+            "Hamburg"
+        ]
     },
     "preferences": {
         "roles": [
-            {
-                "title": "Full-Stack Engineer",
-                "weight": 1.0
-            }
+            "Full-Stack Engineer"
         ],
         "seniority": [
-            {
-                "level": "Entry level",
-                "weight": 1.0
-            },
-            {
-                "level": "Junior",
-                "weight": 1.0
-            },
-            {
-                "level": "Mid",
-                "weight": 0.8
-            },
-            {
-                "level": "Senior",
-                "weight": 0.6
-            }
+            "Entry level",
+            "Junior",
+            "Mid",
+            "Senior"
         ],
         "company_size": [
-            {
-                "range": "1-50",
-                "weight": 1.0
-            },
-            {
-                "range": "50-250",
-                "weight": 0.8
-            },
-            {
-                "range": "250-2000",
-                "weight": 0.6
-            }
+            "1-50",
+            "50-250",
+            "250-2000"
         ],
         "work_mode": [
             {
@@ -99,7 +73,7 @@
                 "weight": 0.8
             }
         ],
-        "industries": "any"
+        "industries": []
     },
     "skills": [
         {
@@ -205,22 +179,16 @@
     ],
     "exclusions": {
         "avoid_roles": [
-            {
-                "title": "PHP Developer",
-                "hard": true
-            },
-            {
-                "title": "Werkstudent",
-                "hard": true
-            }
+            "PHP Developer",
+            "Werkstudent"
         ],
         "avoid_technologies": [
-            {
-                "name": "COBOL",
-                "hard": true
-            }
+            "COBOL",
+            "PHP",
+            "Java"
         ],
-        "avoid_industries": []
+        "avoid_industries": [],
+        "avoid_companies": []
     },
     "motivations": [
         {
