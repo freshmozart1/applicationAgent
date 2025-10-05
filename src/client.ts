@@ -36,6 +36,10 @@ class ApplicationAssistant {
      */
     private static dataDir = path.join(CWD, 'data');
     /**
+     * This is the path to the HTML template file used for generating application letters.
+     */
+    private static templateDir = path.join(this.dataDir, 'template.html');
+    /**
      * This array contains the URLs to scrape for job vacancies.
      */
     private static scrapeUrls = fs.readFileSync(path.join(this.dataDir, 'scrapeUrls.txt'), 'utf8').split('\n').map(l => l.trim());
@@ -177,7 +181,8 @@ class ApplicationAssistant {
                         this.personalInformation,
                         fs.readdirSync(this.examplesDir)
                             .filter(f => f.endsWith('.html'))
-                            .map(f => fs.readFileSync(path.join(this.examplesDir, f), 'utf8'))
+                            .map(f => fs.readFileSync(path.join(this.examplesDir, f), 'utf8')),
+                        fs.readFileSync(this.templateDir, 'utf8')
                     ),
                     `Write a letter of motivation for the following job vacancy: ${JSON.stringify(job)}`
                 )).finalOutput;
@@ -223,7 +228,8 @@ class ApplicationAssistant {
             [this.applicationsDir, `Applications directory does not exist: ${this.applicationsDir}`],
             [this.examplesDir, `Examples directory does not exist: ${this.examplesDir}`],
             [this.personalInformationPath, `Personal information file does not exist: ${this.personalInformationPath}`],
-            [path.join(this.dataDir, 'scrapeUrls.txt'), `Scrape URLs file does not exist: ${path.join(this.dataDir, 'scrapeUrls.txt')}`]
+            [path.join(this.dataDir, 'scrapeUrls.txt'), `Scrape URLs file does not exist: ${path.join(this.dataDir, 'scrapeUrls.txt')}`],
+            [this.templateDir, `HTML template file does not exist: ${this.templateDir}`]
         ];
         for (const [p, msg] of required) if (!fs.existsSync(p)) throw new Error(msg);
         /**

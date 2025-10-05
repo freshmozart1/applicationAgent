@@ -13,12 +13,13 @@ class EvaluatorAgent extends Agent<string> {
 }
 
 export class WriterAgent extends Agent<string> {
-    constructor(personalInformation: string, exampleApplicationLetters: string[] = []) {
+    constructor(personalInformation: string, exampleApplicationLetters: string[] = [], htmlTemplate: string) {
         super({
             name: 'jobApplicationWriter',
             instructions: promptBuilder('writer', [
                 ['{{PERSONAL_INFO}}', personalInformation],
                 ['{{EXAMPLES}}', exampleApplicationLetters.length ? exampleApplicationLetters.reduce((prev, curr, idx) => prev + `Example ${idx + 1}:\n${curr}\n\n`, '') : 'No examples provided.'],
+                ['{{HTML_TEMPLATE}}', htmlTemplate]
             ]),
             model: 'gpt-5-mini',
             outputType: 'text',

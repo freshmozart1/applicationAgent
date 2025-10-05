@@ -22,27 +22,51 @@ Goal: Produce ONE string containing a polished HTML letter of motivation (full s
 - Avoid hedging and filler. Make direct statements. Connect ideas smoothly without forced transitions.
 - Vary punctuation naturally. Use commas or parentheses instead of em/en dashes.
 - Never use these words: indeed, furthermore, thus, moreover, notwithstanding, ostensibly, consequently, specifically, notably, alternatively.
-- Don't add any sentences that mention the languages I speak.
-- Output a valid standalone HTML5 document with:
-  - <!DOCTYPE html>
-  - <head> with <meta charset="utf-8"> and <title>Company – Position Application</title>
-  - minimal inline <style>
-  - <body> with Greeting, Opening hook, Value alignment, Motivation, Closing, Signature (no section headers in output)
-- Do not include placeholders like [Company] or [Greeting]. No external resources. Escape internal quotes. No line breaks inside strings.
-- Use professional formatting with clear contact info. Keep it a brief, one-page body.
-- Put motivation at the forefront. Mention skills and experiences only briefly, to support motivation.
-- Base motivations on the candidate’s personal info. Treat them as thematic anchors (e.g., “Artificial Intelligence”, “Continuous Learning”, “Sustainability”).
-- If a motivation aligns with job description keywords, explicitly highlight it. Use one or two strong motivations that best fit the company’s role and mission.
-- Use the motivations reason and reason_lite only as internal guidance to formulate authentic, vivid motivations. Never output or reference them directly in the letter. 
-- Ensure motivations sound authentic and enthusiastic, not generic.
-- Mimic the user’s writing style from examples (translate German examples into English if needed). Do not copy verbatim.
-- Maintain formal yet enthusiastic tone. Show genuine interest.
-- Start with purpose and a brief professional introduction.
-- State why the position and organization interest you.
-- Conclude by reiterating interest and suitability, then thank the reader for their time.
+- Don't add any sentences that mention spoken languages.
+- Maintain a formal but engaging writing style that is similar to the style used by the user in the examples. (translate German examples into English if needed).
+- Output the letter as a structured HTML file that conforms to the HTML template HTML_TEMPLATE:
+  - Keep the styling and DOM structure of the HTML_TEMPLATE for the HTML letter output.
+  - Replace the placeholder {{Greeting}} in HTML_TEMPLATE with a personalized greeting:
+    - If you have information about the contact person for the job vacancy, use their name in the greeting.
+    - If more than two persons are contact persons for the job vacany, create a formal greeting that does not include the persons names.
+  - Write an introduction for the job posting and replace the {{Introduction}} placeholder in HTML_TEMPLATE with this introduction.
+  - An introduction must obey this rules:
+    - It must be emotional.
+    - Examples of good sentence starters for the first sentence of the introduction:
+      - I have longed for this kind of work for a long time because...
+      - I would love to work for you because...
+    - End the first sentence of the introduction with a emotional reason, why you want to work for that company.
+    - Use more verbs than adjectives.
+    - Express your enthusiasm for the company or industry, but avoid using overly exaggerated language.
+    - Don't use more than 4 sentences for the introduction.
+    - State why the position and organization interest you.
+  - Replace the {{Main}} placeholder in HTML_TEMPLATE with a paragraph that concisely explains your personal qualifications and skills for the job:
+    - Do not combine skills unless they are very closely related.
+    - Only use PERSONAL_INFO.skills as a reputable source for your skills.
+    - Do not use skills from the job vacancy, unless they are in PERSONAL_INFO.skills.
+    - Do not combine different achievements from PERSONAL_INFO.experience_summary.achievements in one sentence.
+  - Replace the {{CompanyReference}} placeholder in HTML_TEMPLATE with a paragraph that obeys this rules:
+    - Explain how your motivation relates to the company.
+    - Put motivation at the forefront.
+    - Base motivations on PERSONAL_INFO.motivations[*].
+    - Treat PERSONAL_INFO.motivations[*].topic as thematic anchors.
+    - If a motivation aligns with job description keywords, explicitly highlight it. Use one or two strong motivations that best fit the company’s role and mission.
+    - Use the motivations reason and reason_lite only as internal guidance to formulate authentic, vivid motivations. Never output or reference them directly in the letter.
+    - Ensure motivations sound authentic and enthusiastic, not generic.
+  - Replace the {{CompanyReference}} placeholder in HTML_TEMPLATE with a final sentence that obeys this rules:
+    - This sentence should express the excitement about a potential job interview.
+    - If the job vacancy requires it, the application must include a statement of salary expectations.
+    - The salary expectation must be PERSONAL_INFO.constraints.salary_min
+    - If the job posting requires it, the statement must include the earliest possible start date.
+    - If you don't have information about the earliest possible start date, assume that the applicant can start immediately.
+  - Replace the {{Farewell}} placeholder in HTML_TEMPLATE with a professional greeting.
 
 # Examples
 {{EXAMPLES}}
 
 # Context
-Personal information about yourself: {{PERSONAL_INFO}}
+PERSONAL_INFO:
+{{PERSONAL_INFO}}
+
+HTML_TEMPLATE:
+{{TEMPLATE}}
