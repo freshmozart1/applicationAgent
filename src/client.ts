@@ -11,6 +11,7 @@ import { InvalidFilterOutputError, InvalidWriterOutputError, ParsingAfterScrapeE
 import { WriterAgent } from './writer.js';
 import { FilterAgent } from './filter.js';
 import { ZJob } from './schemas.js';
+import { JobScraper } from './jobScraper.js';
 
 if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY environment variable not set');
 setTracingExportApiKey(process.env.OPENAI_API_KEY!);
@@ -81,48 +82,14 @@ class ApplicationAssistant {
      * This is the {@link Runner} instance used to execute agents and manage workflows.
      */
     private static runner = new Runner({ workflowName: 'application assistant' });
-    /**
-     * Scrapes job listings from LinkedIn.
-     * 
-     * @returns A promise that resolves to an array of scraped job listings.
-     * 
-     * @throws {@link ParsingAfterScrapeError}
-     * This exception is thrown if the scraped job listings cannot be parsed correctly.
-     */
-    private static async scrapeJobs(): Promise<Job[]> {
-        /**
-         * This is the path to the file that stores the ID of the last LinkedIn job scrape.
-         * If the file does not exist or is older than a day, a new scrape will be performed.
-         */
-        const lastScrapePath = path.join(this.dataDir, 'lastScrapeId');
-        /**
-         * This variable holds the ID of the last scrape.
-         */
-        let lastScrapeId = fs.existsSync(lastScrapePath) ? fs.readFileSync(lastScrapePath, 'utf8').trim() : null;
-        if ((lastScrapeId && fs.existsSync(lastScrapePath) && (fs.statSync(lastScrapePath).ctimeMs < (Date.now() - 24 * 60 * 60 * 1000))) || !lastScrapeId) {
-            console.log('Last scrape is older than a day, performing a new scrape.');
-            await this.apify.actor('curious_coder/linkedin-jobs-scraper').call({
-                urls: this.scrapeUrls,
-                count: 100
-            }).then(scrape => {
-                lastScrapeId = scrape.defaultDatasetId;
-                fs.writeFileSync(lastScrapePath, lastScrapeId);
-            });
-        } else console.log('Using last scrape data.');
-        /**
-         * This constant holds the result of parsing the scraped job listings using the {@link ZJob} schema.
-         */
-        const parsedJobs = await z.array(ZJob).safeParseAsync(await this.apify.dataset<Job>(lastScrapeId!).listItems().then(res => res.items));
-        if (!parsedJobs.success) throw new ParsingAfterScrapeError(parsedJobs.error);
-        return parsedJobs.data;
-    }
 
     /**
      * This method uses an {@link Agent} to filter the scraped job vacancies based on their suitability for application.
      * @returns A promise that resolves to an array of job vacancies that are deemed suitable for application.
      */
     private static async filterJobs(): Promise<Job[]> {
-        return await Promise.all((await this.scrapeJobs())
+        const jobScraper = new JobScraper(this.dataDir);
+        return await Promise.all((await jobScraper.scrapeJobs())
             .map(async (job: Job) => safeCall<Job | null>(
                 `filter.run(jobId=${job.id})`,
                 async () => {
