@@ -1,17 +1,13 @@
 /**
  * This module contains the main code for the application assistant.
  */
-import z from 'zod';
 import fs from 'fs';
 import path from 'path';
-import { ApifyClient } from 'apify-client';
 import { Agent, Runner, setTracingExportApiKey } from '@openai/agents';
 import { safeCall } from './helpers.js';
-import { InvalidFilterOutputError, InvalidWriterOutputError, ParsingAfterScrapeError, SingleJobSubsetTooLargeError } from './errors.js';
+import { InvalidFilterOutputError, SingleJobSubsetTooLargeError } from './errors.js';
 import { WriterAgent } from './writer.js';
 import { FilterAgent } from './filter.js';
-import { ZJob } from './schemas.js';
-import { JobScraper } from './jobScraper.js';
 
 if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY environment variable not set');
 setTracingExportApiKey(process.env.OPENAI_API_KEY!);
@@ -26,12 +22,6 @@ const CWD = process.cwd();
  * filter them based on suitability, and generate tailored application letters.
  */
 class ApplicationAssistant {
-    /**
-     * This is the Apify client used to scrape job vacancies from LinkedIn.
-     */
-    private static apify = new ApifyClient({
-        token: fs.readFileSync(path.join(CWD, 'secrets', 'apify_token'), 'utf8').trim()
-    });
     /**
      * This directory contains all the necessary data files.
      */
@@ -82,45 +72,6 @@ class ApplicationAssistant {
      * This is the {@link Runner} instance used to execute agents and manage workflows.
      */
     private static runner = new Runner({ workflowName: 'application assistant' });
-
-    /**
-     * This method uses an {@link Agent} to filter the scraped job vacancies based on their suitability for application.
-     * @returns A promise that resolves to an array of job vacancies that are deemed suitable for application.
-     */
-    private static async filterJobs(): Promise<Job[]> {
-        const jobScraper = new JobScraper(this.dataDir);
-        return await Promise.all((await jobScraper.scrapeJobs())
-            .map(async (job: Job) => safeCall<Job | null>(
-                `filter.run(jobId=${job.id})`,
-                async () => {
-                    const strippedJob = {
-                        title: job.title,
-                        companyName: job.companyName,
-                        location: job.location,
-                        descriptionText: job.descriptionText,
-                        salaryInfo: job.salaryInfo,
-                        salary: job.salary,
-                        industries: job.industries,
-                        employmentType: job.employmentType,
-                        seniorityLevel: job.seniorityLevel,
-                        companySize: job.companyEmployeesCount
-                    };
-                    const decision = (await this.runner.run<Agent<unknown, 'text'>, 'text'>(
-                        new FilterAgent(this.personalInformation, strippedJob),
-                        `Evaluate the following job vacancy: ${JSON.stringify(strippedJob)}`)
-                    )
-                        .finalOutput?.trim().toLowerCase();
-                    if (decision === 'true') return job;
-                    if (decision === 'false') return null;
-                    throw new InvalidFilterOutputError();
-                },
-                {
-                    retries: 20,
-                    onRequestTooLarge: () => { throw new Error('Job object too large for filter agent'); }
-                }
-            )))
-            .then(results => results.filter((job): job is Job => job !== null));
-    }
 
     /**
      * This method generates job application letters for job vacancies.
@@ -199,10 +150,9 @@ class ApplicationAssistant {
             [this.templateDir, `HTML template file does not exist: ${this.templateDir}`]
         ];
         for (const [p, msg] of required) if (!fs.existsSync(p)) throw new Error(msg);
-        /**
-         * This array holds the job vacancies that are deemed suitable for application after filtering.
-         */
-        this.jobs = await this.filterJobs();
+
+        this.jobs = await (new FilterAgent(this.personalInformation)).filterJobs();
+
         console.log('These jobs match best:\n', this.jobs.map(job => '#' + job.id + ' ' + job.title + ' at ' + job.companyName).join('\n'));
         /**
          * This array holds the generated job application letters.
