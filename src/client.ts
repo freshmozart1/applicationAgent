@@ -8,8 +8,11 @@ import { safeCall } from './helpers.js';
 import { InvalidFilterOutputError, SingleJobSubsetTooLargeError } from './errors.js';
 import { WriterAgent } from './writer.js';
 import { FilterAgent } from './filter.js';
+import { JobScraper } from './jobScraper.js';
+import { MongoClient } from 'mongodb';
 
 if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY environment variable not set');
+if (!process.env.MONGODB_CONNECTION_STRING) throw new Error("MONGODB_CONNECTION_STRING environment variable not set");
 setTracingExportApiKey(process.env.OPENAI_API_KEY!);
 
 /**
@@ -31,25 +34,6 @@ class ApplicationAssistant {
      */
     private static templateDir = path.join(this.dataDir, 'template.html');
 
-    private static personalInformationPath = path.join(this.dataDir, 'personalInformation.json');
-
-    /**
-     * This string contains personal information and inspiration for writing application letters.
-     * 
-     * @remarks
-     * Newlines are removed to ensure the prompt is a single continuous line.
-     * 
-     * This string contains the content of the file located at {@link personalInformationPath}.
-     * 
-     * personalInformation.json should contain:
-     * - Personal information such as name, contact details, and a brief bio.
-     * - Key skills and experiences relevant to the job applications.
-     * - Examples of good application letters that were successful in the past.
-     * - Examples of bad application letters that were unsuccessful, along with explanations of what made them ineffective. //todo #8
-     * 
-     * This information will be used by the AI to tailor application letters to better match the user's profile and improve their chances of success.
-     */
-    private static personalInformation: string = fs.readFileSync(this.personalInformationPath, 'utf8').replace(/(\r\n|\n|\r| {2,})/g, '');
     /**
      * This directory is where the generated application letters will be saved. It also contains good and bad application letters for reference.
      */
@@ -69,6 +53,9 @@ class ApplicationAssistant {
      */
     private static runner = new Runner({ workflowName: 'application assistant' });
 
+    private static mongoClient: MongoClient = new MongoClient(process.env.MONGODB_CONNECTION_STRING!);
+    private static db = this.mongoClient.db('applicationAgentDB');
+
     /**
      * This method generates job application letters for job vacancies.
      * @returns A promise that resolves to an array of generated job application letters.
@@ -84,7 +71,7 @@ class ApplicationAssistant {
      * The generated letters are tailored to the specific job vacancies being applied for.
      * Application letters are written in HTML with inline CSS.
      */
-    private static async writeApplications(jobs: Job[] = this.jobs): Promise<string[]> {
+    private static async writeApplications(personalInformation: PersonalInformation, jobs: Job[] = this.jobs): Promise<string[]> {
         const jl = jobs.length;
         if (jl === 0) return [];
         return Promise.allSettled(jobs.map(async job => safeCall<string>(
@@ -92,7 +79,7 @@ class ApplicationAssistant {
             async () => {
                 const letter = (await this.runner.run<Agent<string>, { job: Job }>(
                     new WriterAgent(
-                        this.personalInformation,
+                        JSON.stringify(personalInformation),
                         fs.readdirSync(this.examplesDir)
                             .filter(f => f.endsWith('.html'))
                             .map(f => fs.readFileSync(path.join(this.examplesDir, f), 'utf8')),
@@ -129,34 +116,77 @@ class ApplicationAssistant {
      */
     public static async start() {
         /**
-         * This directory should contain the apify_token file with the Apify API token.
-         */
-        const secretsDir = path.join(CWD, 'secrets');
-        /**
          * This array contains pairs of required paths error messages that will be thrown if the path does not exist.
          */
         const required: Array<[string, string]> = [
-            [path.join(secretsDir, 'apify_token'), `Apify token file does not exist: ${secretsDir}/apify_token`],
-            [path.join(CWD, 'data'), 'Data directory does not exist'],
-            [secretsDir, 'Secrets directory does not exist'],
+            [this.dataDir, 'Data directory does not exist'],
             [this.applicationsDir, `Applications directory does not exist: ${this.applicationsDir}`],
             [this.examplesDir, `Examples directory does not exist: ${this.examplesDir}`],
-            [this.personalInformationPath, `Personal information file does not exist: ${this.personalInformationPath}`],
-            [path.join(this.dataDir, 'scrapeUrls.txt'), `Scrape URLs file does not exist: ${path.join(this.dataDir, 'scrapeUrls.txt')}`],
             [this.templateDir, `HTML template file does not exist: ${this.templateDir}`]
         ];
         for (const [p, msg] of required) if (!fs.existsSync(p)) throw new Error(msg);
 
-        this.jobs = await (new FilterAgent()).filterJobs();
+        this.jobs = await (new JobScraper(this.dataDir)).scrapeJobs();
+        let personalInformation: PersonalInformation;
+        try {
+            await this.mongoClient.connect();
+            await this.db.command({ ping: 1 });
+            const coll = this.db.collection('personalInformation');
+            const fetch = async <T>(type: string, msg: string) => {
+                const doc = await coll.findOne<{ type: string; value: T }>({ type });
+                if (!doc) throw new Error(msg);
+                return doc.value;
+            };
+            const [contact, eligibility, constraints, preferences, skills, experience, education, certifications, languages_spoken, exclusions, motivations] = await Promise.all([
+                fetch<PersonalInformationContact>('contact', 'No contact information found in personalInformation collection'),
+                fetch<PersonalInformationEligibility>('eligibility', 'No eligibility information found in personalInformation collection'),
+                fetch<PersonalInformationConstraints>('constraints', 'No constraints information found in personalInformation collection'),
+                fetch<PersonalInformationPreferences>('preferences', 'No preferences information found in personalInformation collection'),
+                fetch<PersonalInformationSkill[]>('skills', 'No skills information found in personalInformation collection'),
+                fetch<PersonalInformationExperience>('experience', 'No experience information found in personalInformation collection'),
+                fetch<PersonalInformationEducation[]>('education', 'No education information found in personalInformation collection'),
+                fetch<PersonalInformationCertification[]>('certifications', 'No certifications information found in personalInformation collection'),
+                fetch<PersonalInformationLanguageSpoken[]>('languages_spoken', 'No languages spoken information found in personalInformation collection'),
+                fetch<PersonalInformationExclusions>('exclusions', 'No exclusions information found in personalInformation collection'),
+                fetch<PersonalInformationMotivation[]>('motivations', 'No motivations information found in personalInformation collection')
+            ]);
+            personalInformation = { contact, eligibility, constraints, preferences, skills, experience, education, certifications, languages_spoken, exclusions, motivations };
+        } finally {
+            await this.mongoClient.close();
+        }
 
-        console.log('These jobs match best:\n', this.jobs.map(job => '#' + job.id + ' ' + job.title + ' at ' + job.companyName).join('\n'));
-        /**
-         * This array holds the generated job application letters.
-         * 
-         * @remarks
-         * Each letter is saved as an HTML file in the {@link applicationsDir} directory, with the filename corresponding to the job ID.
-         */
-        const applications = await this.writeApplications();
+        this.jobs = await Promise.allSettled(this.jobs.map(async job => safeCall<Job | null>(
+            `filter.run(jobId=${job.id})`,
+            async () => {
+                const result = (await this.runner.run<FilterAgent, { job: StrippedJob }>(
+                    new FilterAgent(
+                        personalInformation,
+                        {
+                            id: job.id,
+                            title: job.title,
+                            companyName: job.companyName,
+                            location: job.location,
+                            descriptionText: job.descriptionText,
+                            salary: job.salary,
+                            salaryInfo: job.salaryInfo,
+                            industries: job.industries,
+                            employmentType: job.employmentType,
+                            seniorityLevel: job.seniorityLevel,
+                            companySize: job.companyEmployeesCount
+                        }
+                    ),
+                    `Decide if the job vacancy is suitable for application.`
+                )).finalOutput;
+                if (result === 'true') return job;
+                if (result === 'false') return null;
+                throw new InvalidFilterOutputError();
+            }
+        ))).then(results => results.filter(r => r.status === 'fulfilled' && r.value !== null).map(r => {
+            r = r as PromiseFulfilledResult<Job | null>;
+            console.log(`JobId=${r.value!.id} "${r.value!.title}" at ${r.value!.companyName} was accepted by the filter.`);
+            return r.value!;
+        }));
+        const applications = await this.writeApplications(personalInformation);
         for (const application of applications) {
             const filename = path.join(this.applicationsDir, `${this.jobs[applications.indexOf(application)].id}.html`);
             fs.writeFileSync(filename, application);
