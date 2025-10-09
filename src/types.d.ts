@@ -38,6 +38,7 @@ type Job = {
 };
 
 type StrippedJob = {
+    id: string;
     title: string;
     companyName: string;
     location: string;
