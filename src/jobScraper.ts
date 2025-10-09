@@ -15,7 +15,7 @@ export class JobScraper {
 
     async scrapeJobs(): Promise<Job[]> {
         try {
-            if ((this.lastScrapeId && fs.statSync(this.lastScrapeIdPath).ctimeMs < (Date.now() - 24 * 60 * 60 * 100)) || !this.lastScrapeId) {
+            if ((this.lastScrapeId && fs.statSync(this.lastScrapeIdPath).ctimeMs < (Date.now() - 24 * 60 * 60 * 1000)) || !this.lastScrapeId) {
                 await this.mongoClient.connect();
                 await this.db.command({ ping: 1 });
                 const urls = await this.db.collection<{ url: string }>('scrapeUrls').find().toArray().then(docs => docs.map(doc => doc.url));
@@ -39,11 +39,10 @@ export class JobScraper {
 
     constructor(dataDir: string) {
         if (!process.env.APIFY_TOKEN) throw new Error("APIFY_TOKEN is not set in environment variables");
-        if (!process.env.MONGODB_CONNECTION_STRING) throw new Error("MONGODB_CONNECTION_STRING is not set in environment variables");
         this.apifyClient = new ApifyClient({ token: process.env.APIFY_TOKEN });
         this.lastScrapeIdPath = path.join(dataDir, "lastScrapeId");
         this.lastScrapeId = fs.existsSync(this.lastScrapeIdPath) ? fs.readFileSync(this.lastScrapeIdPath, "utf-8") : null;
-        this.mongoClient = new MongoClient(process.env.MONGODB_CONNECTION_STRING);
+        this.mongoClient = new MongoClient(process.env.MONGODB_CONNECTION_STRING!);
         this.db = this.mongoClient.db('applicationAgentDB');
     }
 }
