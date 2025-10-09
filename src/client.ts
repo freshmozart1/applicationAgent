@@ -30,10 +30,6 @@ class ApplicationAssistant {
      * This is the path to the HTML template file used for generating application letters.
      */
     private static templateDir = path.join(this.dataDir, 'template.html');
-    /**
-     * This array contains the URLs to scrape for job vacancies.
-     */
-    private static scrapeUrls = fs.readFileSync(path.join(this.dataDir, 'scrapeUrls.txt'), 'utf8').split('\n').map(l => l.trim());
 
     private static personalInformationPath = path.join(this.dataDir, 'personalInformation.json');
 
@@ -151,7 +147,7 @@ class ApplicationAssistant {
         ];
         for (const [p, msg] of required) if (!fs.existsSync(p)) throw new Error(msg);
 
-        this.jobs = await (new FilterAgent(this.personalInformation)).filterJobs();
+        this.jobs = await (new FilterAgent()).filterJobs();
 
         console.log('These jobs match best:\n', this.jobs.map(job => '#' + job.id + ' ' + job.title + ' at ' + job.companyName).join('\n'));
         /**

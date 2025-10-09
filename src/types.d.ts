@@ -1,115 +1,3 @@
-type PersonalInformation = {
-    contact: {
-        name: string;
-        email: string;
-        phone: string;
-        portfolio_urls: string[]
-    };
-    eligibility: {
-        work_authorization: {
-            region: string;
-            status: string
-        }[];
-        security_clearance: string | null;
-        relocation: {
-            willing: boolean;
-            regions: string[]
-        };
-        remote: {
-            willing: boolean;
-            time_zone: string
-        };
-        availability: {
-            notice_period_days: number
-        };
-        work_schedule_constraints: {
-            weekends: boolean;
-            nights: boolean
-        }
-    };
-    constraints: {
-        salary_min: {
-            currency: string;
-            amount: number
-        };
-        locations_allowed: string[];
-        company_blacklist: string[];
-        industries_disallowed: string[];
-    };
-    preferences: {
-        roles: {
-            title: string;
-            weight: number
-        }[];
-        seniority: {
-            level: string;
-            weight: number
-        }[];
-        company_size: {
-            range: string;
-            weight: number
-        }[];
-        work_mode: {
-            mode: string;
-            weight: number
-        }[];
-        industries: 'any' | string[];
-    };
-    skills: {
-        skill_id: string;
-        name: string;
-        category: string;
-        level: 'beginner' | 'intermediate' | 'advanced' | 'expert';
-        years: number;
-        last_used: string;
-        primary: boolean
-    }[];
-    experience_summary: {
-        years_total: number;
-        domains: string[];
-        recent_titles: string[];
-        achievements: {
-            tag: string;
-            brief: string
-        }[]
-    };
-    education: any[];
-    certifications: {
-        name: string;
-        issued: string;
-        expires: string | null
-    }[];
-    languages_spoken: {
-        language: string;
-        level: string
-    }[];
-    exclusions: {
-        avoid_roles: {
-            title: string;
-            hard: boolean
-        }[];
-        avoid_technlogies: {
-            name: string;
-            hard: boolean
-        }[];
-        avoid_industries: {
-            name: string;
-            hard: boolean
-        }[]
-    };
-    scoring_settings: {
-        recency_decay: {
-            half_life_months: number
-        };
-        skill_match: {
-            primary_weight: number;
-            secondary_weight: number
-        };
-        location_distance_km_max: number;
-        salary_tolerance_percent: number
-    }
-};
-
 type PostalAddress = {
     type?: 'PostalAddress' | string | null;
     streetAddress?: string | null;
@@ -182,4 +70,117 @@ type RetryOptions = {
      * Should perform domain-specific splitting and return combined result.
      */
     onRequestTooLarge?: () => Promise<any>;
+};
+
+type PersonalInformationContact = {
+    name: string;
+    email: string;
+    phone: string;
+    portfolio_urls: string[];
+};
+
+type PersonalInformationEligibility = {
+    work_authorization: {
+        region: string;
+        status: string;
+    }[];
+    security_clearance: string | null;
+    relocation: {
+        willing: boolean;
+        regions: string[];
+    };
+    remote: {
+        willing: boolean;
+        time_zone: string;
+    };
+    availability: {
+        notice_period_days: number;
+    };
+    work_schedule_constraints: {
+        weekends: boolean;
+        nights: boolean;
+    };
+};
+
+type PersonalInformationConstraints = {
+    salary_min: {
+        currency: string;
+        amount: number;
+    };
+    locations_allowed: string[];
+};
+
+type PersonalInformationPreferences = {
+    roles: string[];
+    seniority: string[];
+    company_size: string[];
+    work_mode: {
+        mode: string;
+    }[];
+    industries: string[];
+};
+
+type PersonalInformationSkill = {
+    name: string;
+    aliases: string[];
+    category: string;
+    level: string;
+    years: number;
+    last_used: string;
+    primary: boolean;
+};
+
+type PersonalInformationExperience = {
+    years_total: number;
+    domains: string[];
+    recent_titles: string[];
+    achievements: {
+        tag: string;
+        brief: string;
+    }[];
+};
+
+type PersonalInformationEducation = {
+    degree: string;
+    field: string;
+    institution: string;
+    graduation_year: number;
+};
+
+type PersonalInformationCertification = {
+    name: string;
+    issued: string;
+    expires: string | null;
+};
+
+type PersonalInformationLanguageSpoken = {
+    language: string;
+    level: string;
+};
+
+type PersonalInformationExclusions = {
+    avoid_roles: string[];
+    avoid_technologies: string[];
+    avoid_industries: string[];
+    avoid_companies: string[];
+};
+
+type PersonalInformationMotivation = {
+    topic: string;
+    description: string;
+    reason_lite: string;
+};
+
+type PersonalInformation = {
+    contact: PersonalInformationContact,
+    eligibility: PersonalInformationEligibility,
+    constraints: PersonalInformationConstraints,
+    preferences: PersonalInformationPreferences,
+    skills: PersonalInformationSkill[],
+    experience: PersonalInformationExperience,
+    education: PersonalInformationEducation[],
+    certifications: PersonalInformationCertification[],
+    languages_spoken: PersonalInformationLanguageSpoken[],
+    exclusions: PersonalInformationExclusions,
+    motivations: PersonalInformationMotivation[]
 };
