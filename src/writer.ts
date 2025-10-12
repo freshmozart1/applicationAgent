@@ -1,5 +1,5 @@
-import { Agent, webSearchTool, tool, Runner } from "@openai/agents";
-import { promptBuilder, safeCall } from "./helpers.js";
+import { Agent, webSearchTool } from "@openai/agents";
+import { promptBuilder } from "./helpers.js";
 
 class EvaluatorAgent extends Agent<string> {
     constructor() {
