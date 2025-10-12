@@ -116,11 +116,11 @@ export async function safeCall<T>(context: string, fn: () => Promise<T>, opts: R
                     return await onRequestTooLarge();
                 }
                 console.error(`[safeCall] ${context} request too large but no onRequestTooLarge handler provided.`);
-                throw err;
+                return Promise.reject(err);
             }
             if (!(attempt < retries && retryOn({ status, error: err, attempt }))) {
                 console.error(`[safeCall] ${context} failed (final):`, { status, type, message });
-                throw err;
+                return Promise.reject(err);
             }
             let delayMs: number | null = extractSuggestedDelayMs(err);
             let reason = 'server-suggested';
