@@ -43,11 +43,6 @@ class ApplicationAssistant {
      * This directory contains example application letters that will be used for inspiration by the writer agent.
      */
     private static examplesDir = path.join(this.applicationsDir, 'examples');
-
-    /**
-     * This array holds the filtered job listings that are deemed suitable for application.
-     */
-    private static jobs: Job[] = [];
     /**
      * This is the {@link Runner} instance used to execute agents and manage workflows.
      */
@@ -71,10 +66,10 @@ class ApplicationAssistant {
      * The generated letters are tailored to the specific job vacancies being applied for.
      * Application letters are written in HTML with inline CSS.
      */
-    private static async writeApplications(personalInformation: PersonalInformation, jobs: Job[] = this.jobs): Promise<string[]> {
+    private static async writeApplications(personalInformation: PersonalInformation, jobs: Job[]): Promise<{ filename: string, letter: string }[]> {
         const jl = jobs.length;
         if (jl === 0) return [];
-        return Promise.allSettled(jobs.map(async job => safeCall<string>(
+        return Promise.allSettled(jobs.map(async job => safeCall<{ filename: string, letter: string }>(
             `writer.run(jobId=${job.id})`,
             async () => {
                 const letter = (await this.runner.run<Agent<string>, { job: Job }>(
@@ -87,15 +82,18 @@ class ApplicationAssistant {
                     ),
                     `Write a letter of motivation for the following job vacancy: ${JSON.stringify(job)}`
                 )).finalOutput;
-                if (letter && typeof letter === 'string') return letter;
+                if (letter && typeof letter === 'string') return {
+                    filename: path.join(this.applicationsDir, `${job.id}.html`),
+                    letter
+                };
                 throw new InvalidFilterOutputError();
             },
             {
                 retries: 5,
                 onRequestTooLarge: () => { throw new SingleJobSubsetTooLargeError(); }
             }
-        ))).then(async results => {
-            const letters: string[] = [];
+        ))).then(results => {
+            const letters: { filename: string, letter: string }[] = [];
             let failedCounter = 0;
             for (let i = 0; i < results.length; i++) {
                 const result = results[i];
@@ -126,7 +124,6 @@ class ApplicationAssistant {
         ];
         for (const [p, msg] of required) if (!fs.existsSync(p)) throw new Error(msg);
 
-        this.jobs = await (new JobScraper(this.dataDir)).scrapeJobs();
         let personalInformation: PersonalInformation;
         try {
             await this.mongoClient.connect();
@@ -154,42 +151,44 @@ class ApplicationAssistant {
         } finally {
             await this.mongoClient.close();
         }
+        const jobsToApply = (await Promise.allSettled(
+            (await new JobScraper(this.dataDir).scrapeJobs()).map(job =>
+                safeCall<Job | null>(
+                    `filter.run(jobId=${job.id})`,
+                    async () => {
+                        const result = (await this.runner.run<FilterAgent, { job: StrippedJob }>(
+                            new FilterAgent(
+                                personalInformation,
+                                {
+                                    id: job.id,
+                                    title: job.title,
+                                    companyName: job.companyName,
+                                    location: job.location,
+                                    descriptionText: job.descriptionText,
+                                    salary: job.salary,
+                                    salaryInfo: job.salaryInfo,
+                                    industries: job.industries,
+                                    employmentType: job.employmentType,
+                                    seniorityLevel: job.seniorityLevel,
+                                    companySize: job.companyEmployeesCount
+                                }
+                            ),
+                            'Decide if the job vacancy is suitable for application.'
+                        )).finalOutput;
+                        if (result === 'true') return job;
+                        if (result === 'false') return null;
+                        throw new InvalidFilterOutputError();
+                    }
+                )
+            )
+        ));
 
-        this.jobs = await Promise.allSettled(this.jobs.map(async job => safeCall<Job | null>(
-            `filter.run(jobId=${job.id})`,
-            async () => {
-                const result = (await this.runner.run<FilterAgent, { job: StrippedJob }>(
-                    new FilterAgent(
-                        personalInformation,
-                        {
-                            id: job.id,
-                            title: job.title,
-                            companyName: job.companyName,
-                            location: job.location,
-                            descriptionText: job.descriptionText,
-                            salary: job.salary,
-                            salaryInfo: job.salaryInfo,
-                            industries: job.industries,
-                            employmentType: job.employmentType,
-                            seniorityLevel: job.seniorityLevel,
-                            companySize: job.companyEmployeesCount
-                        }
-                    ),
-                    `Decide if the job vacancy is suitable for application.`
-                )).finalOutput;
-                if (result === 'true') return job;
-                if (result === 'false') return null;
-                throw new InvalidFilterOutputError();
-            }
-        ))).then(results => results.filter(r => r.status === 'fulfilled' && r.value !== null).map(r => {
-            r = r as PromiseFulfilledResult<Job | null>;
-            console.log(`JobId=${r.value!.id} "${r.value!.title}" at ${r.value!.companyName} was accepted by the filter.`);
-            return r.value!;
-        }));
-        const applications = await this.writeApplications(personalInformation);
-        for (const application of applications) {
-            const filename = path.join(this.applicationsDir, `${this.jobs[applications.indexOf(application)].id}.html`);
-            fs.writeFileSync(filename, application);
+        const acceptedJobs = jobsToApply.filter(r => r.status === 'fulfilled' && r.value !== null) as PromiseFulfilledResult<Job>[];
+        const rejectedJobs = jobsToApply.filter(r => r.status === 'fulfilled' && r.value === null).length;
+        const failedJobs = jobsToApply.filter(r => r.status === 'rejected').length;
+        console.log(`Out of ${jobsToApply.length} jobs, ${acceptedJobs.length} were accepted, ${rejectedJobs} were rejected, and ${failedJobs} failed.`);
+        for (const { filename, letter } of await this.writeApplications(personalInformation, acceptedJobs.map(r => r.value))) {
+            fs.writeFileSync(filename, letter);
             console.log('Wrote application letter to', filename);
         }
     }
