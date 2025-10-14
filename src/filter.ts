@@ -1,5 +1,6 @@
 import { Agent } from "@openai/agents";
 import { promptBuilder } from "./helpers.js";
+import { AgentTypeEnum } from "./enums.js";
 
 export class FilterAgent extends Agent<unknown, 'text'> {
     constructor(personalInformation: PersonalInformation, job: StrippedJob) {
@@ -14,7 +15,7 @@ export class FilterAgent extends Agent<unknown, 'text'> {
                     summary: "detailed"
                 }
             },
-            instructions: promptBuilder('filter', [['{{PERSONAL_INFO}}', JSON.stringify(personalInformation)], ['{{JOB}}', JSON.stringify(job)]])
+            instructions: promptBuilder(AgentTypeEnum.Filter, [['{{PERSONAL_INFO}}', JSON.stringify(personalInformation)], ['{{JOB}}', JSON.stringify(job)]])
         });
     }
 }

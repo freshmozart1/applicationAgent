@@ -2,6 +2,9 @@ import OpenAI from "openai";
 import path from 'path';
 import fs from 'fs';
 import { RECOMMENDED_PROMPT_PREFIX } from '@openai/agents-core/extensions';
+import { AgentTypeEnum } from "./enums.js";
+import { Collection, Db, MongoClient } from "mongodb";
+import { NoMongoDBConnectionStringError } from "./errors.js";
 
 export function normalizeWhitespace(input: string) {
     return input
@@ -11,7 +14,26 @@ export function normalizeWhitespace(input: string) {
         .replace(/\n{2,}/g, '\n\n')
         .trim();
 }
-export function promptBuilder(agentType: 'filter' | 'writer' | 'evaluator', additionalPlaceholders: Array<[string, string]> = []): string {
+
+const instructions = await (async () => {
+    if (!process.env.MONGODB_CONNECTION_STRING) throw new NoMongoDBConnectionStringError();
+    const client = new MongoClient(process.env.MONGODB_CONNECTION_STRING);
+    try {
+        const types = [AgentTypeEnum.Filter, AgentTypeEnum.Writer, AgentTypeEnum.Evaluator] as const;
+        const entries = await Promise.all(
+            types.map(async t => {
+                const doc = await client.db('applicationAgentDB').collection('prompts').findOne<MongoDBAgentPromptDocument>({ agentType: t });
+                if (!doc?.prompt?.trim()) throw new Error(`Missing prompt for agent type: ${t}`);
+                return [t, doc.prompt] as const;
+            })
+        );
+        return Object.fromEntries(entries) as Record<AgentTypeEnum, string>;
+    } finally {
+        await client.close();
+    }
+})();
+
+export function promptBuilder(agentType: AgentTypeEnum, additionalPlaceholders: Array<[string, string]> = []): string {
     const readApps = (kind: 'good' | 'bad') => {
         const dir = path.join(process.cwd(), 'data', 'applications', kind + 'Responses');
         if (!fs.existsSync(dir)) throw new Error(`Responses directory does not exist: ${dir}`);
@@ -20,17 +42,6 @@ export function promptBuilder(agentType: 'filter' | 'writer' | 'evaluator', addi
             .map(f => normalizeWhitespace(fs.readFileSync(path.join(dir, f), 'utf8')))
             .filter(Boolean);
     };
-    const base = path.join(process.cwd(), 'instructions');
-    const fileMap = { filter: 'filter.txt', writer: 'writer.txt', evaluator: 'evaluator.txt' } as const;
-    if (!fs.existsSync(base)) throw new Error(`Instructions directory does not exist: ${base}`);
-    const instructions: Record<keyof typeof fileMap, string> = { filter: '', writer: '', evaluator: '' };
-    (Object.keys(fileMap) as Array<keyof typeof fileMap>).forEach(k => {
-        const p = path.join(base, fileMap[k]);
-        if (!fs.existsSync(p)) throw new Error(`${k[0].toUpperCase() + k.slice(1)} instructions file does not exist: ${p}`);
-        const content = fs.readFileSync(p, 'utf8');
-        if (!content) throw new Error(`${k[0].toUpperCase() + k.slice(1)} instructions file is empty: ${p}`);
-        instructions[k] = content;
-    });
     const reservedPlaceholders = {
         GOOD_APPLICATIONS: '{{GOOD_APPLICATIONS}}',
         BAD_APPLICATIONS: '{{BAD_APPLICATIONS}}',

@@ -5,14 +5,14 @@ import fs from 'fs';
 import path from 'path';
 import { Agent, Runner, setTracingExportApiKey } from '@openai/agents';
 import { safeCall } from './helpers.js';
-import { InvalidFilterOutputError, SingleJobSubsetTooLargeError } from './errors.js';
+import { InvalidFilterOutputError, NoMongoDBConnectionStringError, SingleJobSubsetTooLargeError } from './errors.js';
 import { WriterAgent } from './writer.js';
 import { FilterAgent } from './filter.js';
 import { JobScraper } from './jobScraper.js';
 import { MongoClient } from 'mongodb';
 
 if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY environment variable not set');
-if (!process.env.MONGODB_CONNECTION_STRING) throw new Error("MONGODB_CONNECTION_STRING environment variable not set");
+if (!process.env.MONGODB_CONNECTION_STRING) throw new NoMongoDBConnectionStringError();
 setTracingExportApiKey(process.env.OPENAI_API_KEY!);
 
 /**

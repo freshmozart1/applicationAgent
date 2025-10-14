@@ -48,3 +48,10 @@ export class InvalidFilterOutputError extends Error {
         this.name = 'InvalidFilterOutputError';
     }
 }
+
+export class NoMongoDBConnectionStringError extends Error {
+    constructor() {
+        super('MONGODB_CONNECTION_STRING environment variable not set');
+        this.name = 'NoMongoDBConnectionStringError';
+    }
+}

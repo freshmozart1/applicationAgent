@@ -188,3 +188,11 @@ type PersonalInformation = {
     motivations: PersonalInformationMotivation[],
     career_goals: PersonalInformationCareerGoal[];
 };
+
+type MongoDBAgentPromptDocument = {
+    agentType: 'filter' | 'writer' | 'evaluator';
+    name: string;
+    createdAt: Date;
+    updatedAt: Date;
+    prompt: string;
+};
