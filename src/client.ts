@@ -134,7 +134,7 @@ class ApplicationAssistant {
                 if (!doc) throw new Error(msg);
                 return doc.value;
             };
-            const [contact, eligibility, constraints, preferences, skills, experience, education, certifications, languages_spoken, exclusions, motivations] = await Promise.all([
+            const [contact, eligibility, constraints, preferences, skills, experience, education, certifications, languages_spoken, exclusions, motivations, career_goals] = await Promise.all([
                 fetch<PersonalInformationContact>('contact', 'No contact information found in personalInformation collection'),
                 fetch<PersonalInformationEligibility>('eligibility', 'No eligibility information found in personalInformation collection'),
                 fetch<PersonalInformationConstraints>('constraints', 'No constraints information found in personalInformation collection'),
@@ -145,9 +145,10 @@ class ApplicationAssistant {
                 fetch<PersonalInformationCertification[]>('certifications', 'No certifications information found in personalInformation collection'),
                 fetch<PersonalInformationLanguageSpoken[]>('languages_spoken', 'No languages spoken information found in personalInformation collection'),
                 fetch<PersonalInformationExclusions>('exclusions', 'No exclusions information found in personalInformation collection'),
-                fetch<PersonalInformationMotivation[]>('motivations', 'No motivations information found in personalInformation collection')
+                fetch<PersonalInformationMotivation[]>('motivations', 'No motivations information found in personalInformation collection'),
+                fetch<PersonalInformationCareerGoal[]>('career_goals', 'No career goals information found in personalInformation collection')
             ]);
-            personalInformation = { contact, eligibility, constraints, preferences, skills, experience, education, certifications, languages_spoken, exclusions, motivations };
+            personalInformation = { contact, eligibility, constraints, preferences, skills, experience, education, certifications, languages_spoken, exclusions, motivations, career_goals };
         } finally {
             await this.mongoClient.close();
         }
