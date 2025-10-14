@@ -4,6 +4,7 @@ import path from "path";
 import { promptBuilder } from "./helpers.js";
 import { JobEvalSchema } from "./schemas.js";
 import { readJSON, sleep } from "./helpers.js";
+import { AgentTypeEnum } from "./enums.js";
 
 const openai = new OpenAI();
 const root = process.cwd();
@@ -71,7 +72,7 @@ for (const [i, fileId] of (
                         template: [
                             {
                                 role: "system",
-                                content: promptBuilder("filter", [
+                                content: promptBuilder(AgentTypeEnum.Filter, [
                                     ["{{PERSONAL_INFO}}", JSON.stringify(personal)],
                                     ["{{JOB}}", "{{item.job}}"]
                                 ])

@@ -4,7 +4,7 @@ import z from "zod";
 import { ApifyClient } from "apify-client";
 import { Db, MongoClient } from "mongodb";
 import { ZJob } from './schemas.js';
-import { ParsingAfterScrapeError } from "./errors.js";
+import { NoMongoDBConnectionStringError, ParsingAfterScrapeError } from "./errors.js";
 
 export class JobScraper {
     apifyClient: ApifyClient;
@@ -42,7 +42,8 @@ export class JobScraper {
         this.apifyClient = new ApifyClient({ token: process.env.APIFY_TOKEN });
         this.lastScrapeIdPath = path.join(dataDir, "lastScrapeId");
         this.lastScrapeId = fs.existsSync(this.lastScrapeIdPath) ? fs.readFileSync(this.lastScrapeIdPath, "utf-8") : null;
-        this.mongoClient = new MongoClient(process.env.MONGODB_CONNECTION_STRING!);
+        if (!process.env.MONGODB_CONNECTION_STRING) throw new NoMongoDBConnectionStringError();
+        this.mongoClient = new MongoClient(process.env.MONGODB_CONNECTION_STRING);
         this.db = this.mongoClient.db('applicationAgentDB');
     }
 }
