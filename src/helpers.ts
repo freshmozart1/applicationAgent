@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { RECOMMENDED_PROMPT_PREFIX } from '@openai/agents-core/extensions';
 import { AgentTypeEnum } from "./enums.js";
-import { Collection, Db, MongoClient } from "mongodb";
+import { MongoClient } from "mongodb";
 import { NoMongoDBConnectionStringError } from "./errors.js";
 
 export function normalizeWhitespace(input: string) {
