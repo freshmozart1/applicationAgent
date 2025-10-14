@@ -172,6 +172,8 @@ type PersonalInformationMotivation = {
     reason_lite: string;
 };
 
+type PersonalInformationCareerGoal = PersonalInformationMotivation;
+
 type PersonalInformation = {
     contact: PersonalInformationContact,
     eligibility: PersonalInformationEligibility,
@@ -183,5 +185,6 @@ type PersonalInformation = {
     certifications: PersonalInformationCertification[],
     languages_spoken: PersonalInformationLanguageSpoken[],
     exclusions: PersonalInformationExclusions,
-    motivations: PersonalInformationMotivation[]
+    motivations: PersonalInformationMotivation[],
+    career_goals: PersonalInformationCareerGoal[];
 };
