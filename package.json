@@ -38,7 +38,10 @@
     "@openai/agents": "^0.1.6",
     "apify-client": "^2.15.1",
     "mongodb": "6.20",
+    "next": "^15.5.5",
     "openai": "^5.21.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "zod": "^3.25.76",
     "zod-v4": "npm:zod@^4.1.9"
   }
