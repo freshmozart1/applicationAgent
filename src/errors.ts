@@ -13,16 +13,6 @@ export class ParsingAfterScrapeError extends Error {
 }
 
 /**
- * This error is thrown when the evaluation output from the evaluator agent is not exactly "good" or "bad".
- */
-export class InvalidEvaluationOutputError extends Error {
-    constructor() {
-        super('Evaluation output must be exactly "good" or "bad"');
-        this.name = 'InvalidEvaluationOutputError';
-    }
-}
-
-/**
  * This error is thrown when the writer agent does not return valid final output.
  */
 export class InvalidWriterOutputError extends Error {

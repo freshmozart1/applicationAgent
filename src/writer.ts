@@ -2,17 +2,6 @@ import { Agent, webSearchTool } from "@openai/agents";
 import { promptBuilder } from "./helpers.js";
 import { AgentTypeEnum } from "./enums.js";
 
-class EvaluatorAgent extends Agent<string> {
-    constructor() {
-        super({
-            name: 'responseEvaluator',
-            instructions: promptBuilder(AgentTypeEnum.Evaluator),
-            model: 'gpt-5-nano',
-            outputType: 'text',
-        });
-    }
-}
-
 export class WriterAgent extends Agent<string> {
     constructor(personalInformation: string, exampleApplicationLetters: string[] = [], htmlTemplate: string) {
         super({
