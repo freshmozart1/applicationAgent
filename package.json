@@ -26,11 +26,18 @@
   ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "rm -rf build && tsc && chmod 755 build/*.js && node build/client.js"
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
   },
   "devDependencies": {
     "@types/express": "^5.0.3",
     "@types/node": "^24.3.0",
+    "@types/react": "^19.2.2",
+    "eslint": "^9.37.0",
+    "eslint-config-next": "15.5.5",
+    "eslint-config-prettier": "^10.1.8",
     "tsx": "^4.20.4",
     "typedoc": "^0.28.12"
   },
