@@ -46,12 +46,3 @@ const jobSchema = (z: any) =>
 
 export const ZJob = jobSchema(zod3);
 export const JJob = zod4.toJSONSchema(jobSchema(zod4));
-
-export const JobEvalSchema = zod4.object({
-    fits: zod4.literal("true").or(zod4.literal("false")),
-    job: jobSchema(zod4)
-});
-
-export const EvaluationToolSchema = zod3.object({
-    letter: zod3.string()
-})

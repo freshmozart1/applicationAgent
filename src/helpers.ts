@@ -19,15 +19,13 @@ const instructions = await (async () => {
     if (!process.env.MONGODB_CONNECTION_STRING) throw new NoMongoDBConnectionStringError();
     const client = new MongoClient(process.env.MONGODB_CONNECTION_STRING);
     try {
-        const types = [AgentTypeEnum.Filter, AgentTypeEnum.Writer, AgentTypeEnum.Evaluator] as const;
-        const entries = await Promise.all(
-            types.map(async t => {
+        return Object.fromEntries(await Promise.all(
+            [AgentTypeEnum.Filter, AgentTypeEnum.Writer].map(async t => {
                 const doc = await client.db('applicationAgentDB').collection('prompts').findOne<MongoDBAgentPromptDocument>({ agentType: t });
                 if (!doc?.prompt?.trim()) throw new Error(`Missing prompt for agent type: ${t}`);
-                return [t, doc.prompt] as const;
+                return [t, doc.prompt];
             })
-        );
-        return Object.fromEntries(entries) as Record<AgentTypeEnum, string>;
+        ));
     } finally {
         await client.close();
     }

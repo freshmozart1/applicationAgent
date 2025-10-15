@@ -26,8 +26,7 @@
   ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "rm -rf build && tsc && chmod 755 build/*.js && node build/client.js",
-    "eval": "rm -rf build && tsc && chmod 755 build/*.js && node build/evaluate.js"
+    "start": "rm -rf build && tsc && chmod 755 build/*.js && node build/client.js"
   },
   "devDependencies": {
     "@types/express": "^5.0.3",
