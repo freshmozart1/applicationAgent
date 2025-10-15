@@ -1,19 +1,36 @@
 {
-    "compilerOptions": {
-        "target": "ES2022",
-        "module": "Node16",
-        "moduleResolution": "Node16",
-        "outDir": "./build",
-        "rootDir": "./src",
-        "strict": true,
-        "esModuleInterop": true,
-        "skipLibCheck": true,
-        "forceConsistentCasingInFileNames": true
-    },
-    "include": [
-        "src/**/*"
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "outDir": "./build",
+    "rootDir": ".",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
     ],
-    "exclude": [
-        "node_modules"
+    "allowJs": true,
+    "noEmit": true,
+    "incremental": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "plugins": [
+      {
+        "name": "next"
+      }
     ]
+  },
+  "include": [
+    "src/**/*",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

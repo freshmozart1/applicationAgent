@@ -16,3 +16,5 @@ data/applications/*.html
 data/last_run.txt
 data/lastScrapeId
 data/lastScrape.json
+.next
+.vscode/settings.json
